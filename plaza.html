@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>作品広場</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Yuji+Syuku&display=swap" rel="stylesheet">
+    <style>
+        body { 
+            font-family: 'Yuji Syuku', serif;
+            background-color: #fdfaf6; /* 生成色 */
+            color: #333; /* 墨色 */
+        }
+        .header-gradient {
+            background: linear-gradient(135deg, #3c4a6d 0%, #2a3550 100%); /* 藍色 */
+        }
+        .haiku-card { /* 短冊風デザイン */
+            writing-mode: vertical-rl;
+            text-orientation: upright;
+            white-space: pre-line;
+            font-size: 1.25rem;
+            line-height: 2.2rem;
+            height: 320px;
+            cursor: pointer;
+            transition: all 0.3s;
+            border-top: 5px solid #d9534f; /* 朱色 */
+            background-color: #fff;
+        }
+        .haiku-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+            border-color: #c9302c;
+        }
+        .modal-backdrop {
+            transition: opacity 0.3s ease-in-out;
+        }
+        .modal-content {
+            transition: transform 0.3s ease-in-out, opacity 0.3s ease-in-out;
+        }
+        .award-card {
+            transition: transform 0.3s;
+            border-top: 8px solid;
+        }
+        .award-card:hover {
+            transform: scale(1.05);
+        }
+    </style>
+</head>
+<body class="p-4 md:p-8">
+
+    <?!= HtmlService.createHtmlOutputFromFile('ui_components').getContent(); ?>
+
+    <div class="max-w-6xl mx-auto">
+        <header class="header-gradient text-white p-6 rounded-2xl shadow-xl text-center mb-8">
+            <h1 class="text-3xl md:text-5xl font-bold"><ruby>作<rt>さく</rt>品<rt>ひん</rt><ruby>広<rt>ひろ</rt>場<rt>ば</rt></ruby></h1>
+            <div id="theme-display" class="mt-4 bg-white/20 p-4 rounded-xl">
+                <h2 class="text-xl font-semibold"><ruby>今<rt>こん</rt>回<rt>かい</rt></ruby>のお<ruby>題<rt>だい</rt></ruby></h2>
+                <p id="currentTheme" class="text-3xl font-bold mt-1 text-yellow-300"></p>
+            </div>
+            <p id="voting-status" class="mt-4 text-lg"></p>
+        </header>
+
+        <main>
+            <!-- 結果発表エリア -->
+            <div id="result-area" class="hidden mb-12">
+                <h2 class="text-4xl font-bold text-center mb-8" style="color: #c9302c;">🎉 <ruby>結<rt>けっ</rt>果<rt>か</rt><ruby>発<rt>はっ</rt>表<rt>ぴょう</rt></ruby> 🎉</h2>
+                <div class="grid md:grid-cols-3 gap-6 items-end">
+                    <!-- 銀賞 -->
+                    <div id="silver-award" class="award-card bg-white p-6 rounded-2xl shadow-lg text-center order-2 md:order-1 border-gray-400"></div>
+                    <!-- 金賞 -->
+                    <div id="gold-award" class="award-card bg-white p-8 rounded-2xl shadow-xl text-center order-1 md:order-2 border-yellow-400"></div>
+                    <!-- 銅賞 -->
+                    <div id="bronze-award" class="award-card bg-white p-6 rounded-2xl shadow-lg text-center order-3 md:order-3" style="border-color: #cd7f32;"></div>
+                </div>
+            </div>
+
+            <!-- 俳句一覧エリア -->
+            <div id="haiku-list-area">
+                <div id="haiku-grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 md:gap-6">
+                </div>
+            </div>
+        </main>
+
+        <nav class="text-center mt-12 space-x-4">
+             <a href="<?= url ?>?page=index" target="_top" class="bg-purple-700 hover:bg-purple-800 text-white font-bold py-3 px-8 rounded-full transition shadow-lg hover:shadow-xl transform hover:-translate-y-1"><ruby>俳<rt>はい</rt>句<rt>く</rt></ruby>を<ruby>投<rt>とう</rt>稿<rt>こう</rt></ruby>する</a>
+             <a href="<?= url ?>?page=mypage" target="_top" class="bg-cyan-700 hover:bg-cyan-800 text-white font-bold py-3 px-8 rounded-full transition shadow-lg hover:shadow-xl transform hover:-translate-y-1">マイページへ</a>
+        </nav>
+    </div>
+
+    <!-- ポップアップモーダル -->
+    <div id="haiku-modal" class="hidden fixed inset-0 bg-black/50 modal-backdrop flex items-center justify-center p-4 z-50">
+        <div id="modal-content" class="modal-content bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 md:p-8 transform scale-95 opacity-0 relative">
+            <button onclick="closeModal()" class="absolute top-4 right-4 text-gray-400 hover:text-gray-600">
+                <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+            <div id="modal-haiku" class="text-4xl font-bold mb-6 text-center leading-relaxed"></div>
+            
+            <div id="modal-vote-section" class="mb-6">
+                <h3 class="text-xl font-bold mb-4 text-center">この<ruby>作<rt>さく</rt>品<rt>ひん</rt></ruby>に<ruby>投<rt>とう</rt>票<rt>ひょう</rt></ruby>する</h3>
+                <div class="flex justify-center gap-2 md:gap-4">
+                    <button id="vote-gold" data-score="3" class="vote-btn flex-1 bg-yellow-400 hover:bg-yellow-500 text-white font-bold py-3 px-4 rounded-full shadow-md transition transform hover:scale-105">🥇 <ruby>金<rt>きん</rt>賞<rt>しょう</rt></ruby></button>
+                    <button id="vote-silver" data-score="2" class="vote-btn flex-1 bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-3 px-4 rounded-full shadow-md transition transform hover:scale-105">🥈 <ruby>銀<rt>ぎん</rt>賞<rt>しょう</rt></ruby></button>
+                    <button id="vote-bronze" data-score="1" class="vote-btn flex-1 text-white font-bold py-3 px-4 rounded-full shadow-md transition transform hover:scale-105" style="background-color: #cd7f32;">🥉 <ruby>銅<rt>どう</rt>賞<rt>しょう</rt></ruby></button>
+                </div>
+            </div>
+
+            <div id="comment-section" class="border-t pt-6">
+                <h3 class="text-xl font-bold mb-3 text-center">コメントを<ruby>投<rt>とう</rt>稿<rt>こう</rt></ruby>する</h3>
+                <form id="comment-form" class="mt-4 flex gap-2">
+                    <input id="comment-input" type="text" class="flex-grow border-2 border-gray-300 rounded-full px-4 py-2 focus:ring-2 focus:ring-blue-500" placeholder="感想や応援の言葉をおくろう" required>
+                    <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-5 rounded-full shadow-md transition"><ruby>送<rt>そう</rt>信<rt>しん</rt></ruby></button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+<script>
+    let currentHaikuId = null;
+    let voterId = localStorage.getItem('voter_id');
+    if (!voterId) {
+        voterId = 'voter_' + Date.now() + Math.random();
+        localStorage.setItem('voter_id', voterId);
+    }
+    const savedName = localStorage.getItem('haiku_name');
+
+    function loadData() {
+        showLoader();
+        google.script.run.withSuccessHandler(response => {
+            hideLoader();
+            renderPage(response);
+        }).withFailureHandler(err => {
+            hideLoader();
+            showNotification('error', 'データの<ruby>読<rt>よ</rt></ruby>み<ruby>込<rt>こ</rt></ruby>みに<ruby>失<rt>しっ</rt>敗<rt>ぱい</rt></ruby>しました。');
+        }).getKukaiData(voterId);
+    }
+
+    function renderPage(data) {
+        document.getElementById('currentTheme').textContent = data.theme;
+        const isVotingClosed = data.votingStatus === '投票締切';
+        let votingStatusText = data.votingStatus === '投票受付中' ?
+            '<ruby>投<rt>とう</rt>票<rt>ひょう</rt><ruby>受<rt>うけ</rt>付<rt>つけ</rt>中<rt>ちゅう</rt></ruby>' :
+            '<ruby>投<rt>とう</rt>票<rt>ひょう</rt><ruby>締<rt>しめ</rt>切<rt>きり</rt></ruby>';
+        document.getElementById('voting-status').innerHTML = `（${votingStatusText}）`;
+
+        if (isVotingClosed) {
+            document.getElementById('haiku-list-area').classList.add('hidden');
+            document.getElementById('result-area').classList.remove('hidden');
+            renderResults(data.haikus);
+        } else {
+            document.getElementById('haiku-list-area').classList.remove('hidden');
+            document.getElementById('result-area').classList.add('hidden');
+            renderHaikuGrid(data.haikus);
+        }
+    }
+
+    function renderResults(haikus) {
+        const ranks = { 1: [], 2: [], 3: [] };
+        const uniqueScores = [...new Set(haikus.map(h => h.score))].sort((a, b) => b - a).slice(0, 3);
+        
+        haikus.forEach(h => {
+            const rank = uniqueScores.indexOf(h.score) + 1;
+            if (rank >= 1 && rank <= 3) {
+                ranks[rank].push(h);
+            }
+        });
+
+        const createAwardHtml = (award, color, haikuList) => {
+            if (haikuList.length === 0) return `<h3 class="text-3xl font-bold mb-4">${award}</h3><p class="text-gray-500"><ruby>該<rt>がい</rt>当<rt>とう</rt><ruby>作<rt>さく</rt>品<rt>ひん</rt></ruby>なし</p>`;
+            return `
+                <h3 class="text-4xl font-bold mb-4" style="color: ${color};">${award}</h3>
+                ${haikuList.map(h => `
+                    <div class="mb-4">
+                        <p class="text-3xl leading-relaxed">${h.haiku}</p>
+                        <p class="text-xl text-gray-700 mt-2"><strong><ruby>作<rt>さく</rt>者<rt>しゃ</rt></ruby>:</strong> ${h.name}</p>
+                        <p class="text-2xl font-bold mt-1" style="color: ${color};">${h.score} <ruby>点<rt>てん</rt></ruby></p>
+                    </div>
+                `).join('<hr class="my-3">')}
+            `;
+        };
+
+        document.getElementById('gold-award').innerHTML = createAwardHtml('🥇 <ruby>金<rt>きん</rt>賞<rt>しょう</rt></ruby>', '#D97706', ranks[1]);
+        document.getElementById('silver-award').innerHTML = createAwardHtml('🥈 <ruby>銀<rt>ぎん</rt>賞<rt>しょう</rt></ruby>', '#6B7280', ranks[2]);
+        document.getElementById('bronze-award').innerHTML = createAwardHtml('🥉 <ruby>銅<rt>どう</rt>賞<rt>しょう</rt></ruby>', '#92400E', ranks[3]);
+    }
+
+    function renderHaikuGrid(haikus) {
+        const grid = document.getElementById('haiku-grid');
+        grid.innerHTML = '';
+        haikus.forEach(haiku => {
+            const card = document.createElement('div');
+            card.className = 'haiku-card bg-white p-4 rounded-lg shadow-md flex items-center justify-center';
+            card.innerText = `${haiku.line1}\n${haiku.line2}\n${haiku.line3}`;
+            card.onclick = () => openModal(haiku.id);
+            grid.appendChild(card);
+        });
+    }
+
+    function openModal(haikuId) {
+        currentHaikuId = haikuId;
+        showLoader();
+        google.script.run.withSuccessHandler(data => {
+            hideLoader();
+            const haiku = data.haikus.find(h => h.id === haikuId);
+            if (!haiku) return;
+
+            document.getElementById('modal-haiku').innerHTML = `${haiku.line1}<br>${haiku.line2}<br>${haiku.line3}`;
+            
+            const isMyHaiku = haiku.author === savedName;
+            const isVotingClosed = data.votingStatus === '投票締切';
+
+            document.getElementById('modal-vote-section').style.display = (!isVotingClosed && !isMyHaiku) ? 'block' : 'none';
+            document.getElementById('comment-section').style.display = (!isVotingClosed && !isMyHaiku) ? 'block' : 'none';
+
+            if (!isMyHaiku) {
+                updateVoteButtons(data.myVotes);
+            }
+
+            document.getElementById('haiku-modal').classList.remove('hidden');
+            setTimeout(() => {
+                document.getElementById('modal-content').classList.remove('scale-95', 'opacity-0');
+            }, 10);
+        }).getKukaiData(voterId);
+    }
+    
+    function closeModal() {
+        document.getElementById('modal-content').classList.add('scale-95', 'opacity-0');
+        setTimeout(() => {
+            document.getElementById('haiku-modal').classList.add('hidden');
+        }, 300);
+    }
+
+    function updateVoteButtons(myVotes) {
+        const buttons = document.querySelectorAll('.vote-btn');
+        buttons.forEach(btn => {
+            const score = btn.dataset.score;
+            btn.disabled = false;
+            const awardName = {3:'🥇 <ruby>金<rt>きん</rt>賞<rt>しょう</rt></ruby>', 2:'🥈 <ruby>銀<rt>ぎん</rt>賞<rt>しょう</rt></ruby>', 1:'🥉 <ruby>銅<rt>どう</rt>賞<rt>しょう</rt></ruby>'}[score];
+            btn.innerHTML = awardName;
+            
+            if (myVotes.find(v => v.score == score)) {
+                btn.disabled = true;
+                btn.innerHTML = '<ruby>投<rt>とう</rt>票<rt>ひょう</rt></ruby>しました！';
+            }
+            if (myVotes.find(v => v.haikuId == currentHaikuId)) {
+                btn.disabled = true;
+            }
+        });
+    }
+
+    function submitVote(score) {
+        showLoader();
+        google.script.run.withSuccessHandler(response => {
+            hideLoader();
+            if (response.success) {
+                showNotification('success', '<ruby>投<rt>とう</rt>票<rt>ひょう</rt></ruby>しました！');
+                loadData();
+                closeModal();
+            } else {
+                showNotification('error', response.message || '<ruby>投<rt>とう</rt>票<rt>ひょう</rt></ruby>に<ruby>失<rt>しっ</rt>敗<rt>ぱい</rt></ruby>しました。');
+            }
+        }).withFailureHandler(err => {
+            hideLoader();
+            showNotification('error', '<ruby>通<rt>つう</rt>信<rt>しん</rt></ruby>エラーが<ruby>発<rt>はっ</rt>生<rt>せい</rt></ruby>しました。');
+        }).submitVote(currentHaikuId, score, voterId);
+    }
+
+    function postComment(event) {
+        event.preventDefault();
+        const input = document.getElementById('comment-input');
+        const comment = input.value.trim();
+        if (!comment) {
+            showNotification('error', 'コメントを<ruby>入<rt>にゅう</rt>力<rt>りょく</rt></ruby>してください。');
+            return;
+        }
+        if (!savedName) {
+            showNotification('error', 'コメントするには、<ruby>先<rt>さき</rt></ruby>に<ruby>俳<rt>はい</rt>句<rt>く</rt></ruby>を<ruby>投<rt>とう</rt>稿<rt>こう</rt></ruby>して<ruby>名<rt>な</rt>前<rt>まえ</rt></ruby>を<ruby>登<rt>とう</rt>録<rt>ろく</rt></ruby>してください。');
+            return;
+        }
+        showLoader();
+        google.script.run.withSuccessHandler(response => {
+            hideLoader();
+            if (response.success) {
+                showNotification('success', 'コメントを<ruby>投<rt>とう</rt>稿<rt>こう</rt></ruby>しました。');
+                input.value = '';
+                closeModal();
+            } else {
+                showNotification('error', 'コメントの<ruby>投<rt>とう</rt>稿<rt>こう</rt></ruby>に<ruby>失<rt>しっ</rt>敗<rt>ぱい</rt></ruby>しました。');
+            }
+        }).withFailureHandler(err => {
+            hideLoader();
+            showNotification('error', '<ruby>通<rt>つう</rt>信<rt>しん</rt></ruby>エラーが<ruby>発<rt>はっ</rt>生<rt>せい</rt></ruby>しました。');
+        }).submitComment(currentHaikuId, comment, savedName);
+    }
+
+    document.querySelectorAll('.vote-btn').forEach(btn => {
+        btn.addEventListener('click', () => submitVote(parseInt(btn.dataset.score)));
+    });
+    
+    document.getElementById('comment-form').addEventListener('submit', postComment);
+    
+    window.addEventListener('load', loadData);
+    setInterval(loadData, 60000);
+</script>
+</body>
+</html>
