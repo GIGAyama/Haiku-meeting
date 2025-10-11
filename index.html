@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>俳句を投稿しよう</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Yuji+Syuku&display=swap" rel="stylesheet">
+    <style>
+        body { 
+            font-family: 'Yuji Syuku', serif;
+            background-color: #fdfaf6; /* 生成色 */
+            color: #333; /* 墨色 */
+        }
+        .header-gradient {
+            background: linear-gradient(135deg, #3c4a6d 0%, #2a3550 100%); /* 藍色系グラデーション */
+        }
+        .submit-btn {
+            background-color: #d9534f; /* 朱色 */
+            transition: background-color 0.3s;
+        }
+        .submit-btn:hover {
+            background-color: #c9302c;
+        }
+        .nav-link {
+            border: 2px solid #3c4a6d;
+            color: #3c4a6d;
+        }
+        .nav-link:hover {
+            background-color: #3c4a6d;
+            color: white;
+        }
+    </style>
+</head>
+<body class="p-4 md:p-8">
+
+    <?!= HtmlService.createHtmlOutputFromFile('ui_components').getContent(); ?>
+
+    <div class="max-w-2xl mx-auto">
+        <header class="header-gradient text-white p-6 rounded-2xl shadow-xl text-center mb-8">
+            <h1 class="text-3xl md:text-5xl font-bold"><ruby>俳<rt>はい</rt>句<rt>く</rt></ruby>を<ruby>投<rt>とう</rt>稿<rt>こう</rt></ruby>しよう</h1>
+            <div id="theme-display" class="mt-4 bg-white/20 p-4 rounded-xl">
+                <h2 class="text-xl font-semibold"><ruby>今<rt>こん</rt>回<rt>かい</rt></ruby>のお<ruby>題<rt>だい</rt></ruby></h2>
+                <p id="currentTheme" class="text-3xl font-bold mt-1 text-yellow-300"></p>
+            </div>
+        </header>
+
+        <main class="bg-white/80 p-6 md:p-8 rounded-2xl shadow-lg">
+            <form id="haiku-form">
+                <div class="mb-6">
+                    <label for="author-name" class="block text-xl font-bold mb-2">あなたの<ruby>名<rt>な</rt>前<rt>まえ</rt></ruby></label>
+                    <input type="text" id="author-name" class="w-full p-3 border-2 border-gray-300 rounded-lg text-lg focus:ring-2 focus:ring-blue-500" required>
+                </div>
+                <div>
+                    <label class="block text-xl font-bold mb-3"><ruby>俳<rt>はい</rt>句<rt>く</rt></ruby>（<ruby>五<rt>ご</rt></ruby>・<ruby>七<rt>しち</rt></ruby>・<ruby>五<rt>ご</rt></ruby>）</label>
+                    <div class="space-y-3">
+                        <input type="text" id="line1" class="w-full p-3 border-2 border-gray-300 rounded-lg text-lg focus:ring-2 focus:ring-blue-500" placeholder="上の句（ご）" required>
+                        <input type="text" id="line2" class="w-full p-3 border-2 border-gray-300 rounded-lg text-lg focus:ring-2 focus:ring-blue-500" placeholder="中の句（しち）" required>
+                        <input type="text" id="line3" class="w-full p-3 border-2 border-gray-300 rounded-lg text-lg focus:ring-2 focus:ring-blue-500" placeholder="下の句（ご）" required>
+                    </div>
+                </div>
+                <button type="submit" class="submit-btn w-full mt-8 text-white font-bold text-2xl py-4 rounded-full shadow-lg transform hover:-translate-y-1 transition">
+                    この<ruby>俳<rt>はい</rt>句<rt>く</rt></ruby>を<ruby>投<rt>とう</rt>稿<rt>こう</rt></ruby>する
+                </button>
+            </form>
+             <nav class="text-center mt-12 space-x-4">
+                <a href="<?= url ?>?page=plaza" target="_top" class="nav-link inline-block font-bold py-3 px-8 rounded-full transition shadow-lg hover:shadow-xl hover:-translate-y-1"><ruby>作<rt>さく</rt>品<rt>ひん</rt><ruby>広<rt>ひろ</rt>場<rt>ば</rt></ruby>へ</a>
+                <a href="<?= url ?>?page=mypage" target="_top" class="nav-link inline-block font-bold py-3 px-8 rounded-full transition shadow-lg hover:shadow-xl hover:-translate-y-1">マイページへ</a>
+            </nav>
+        </main>
+    </div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        showLoader();
+        google.script.run.withSuccessHandler(data => {
+            hideLoader();
+            document.getElementById('currentTheme').textContent = data.theme;
+            const savedName = localStorage.getItem('haiku_name');
+            if (savedName) {
+                document.getElementById('author-name').value = savedName;
+            }
+        }).withFailureHandler(() => {
+            hideLoader();
+            showNotification('error', 'お<ruby>題<rt>だい</rt></ruby>の<ruby>読<rt>よ</rt></ruby>み<ruby>込<rt>こ</rt></ruby>みに<ruby>失<rt>しっ</rt>敗<rt>ぱい</rt></ruby>しました。');
+        }).getAdminData();
+    });
+
+    document.getElementById('haiku-form').addEventListener('submit', event => {
+        event.preventDefault();
+        const name = document.getElementById('author-name').value.trim();
+        const line1 = document.getElementById('line1').value.trim();
+        const line2 = document.getElementById('line2').value.trim();
+        const line3 = document.getElementById('line3').value.trim();
+        if (!name || !line1 || !line2 || !line3) {
+            showNotification('error', '<ruby>全<rt>すべ</rt></ruby>ての<ruby>項<rt>こう</rt>目<rt>もく</rt></ruby>を<ruby>入<rt>にゅう</rt>力<rt>りょく</rt></ruby>してください。');
+            return;
+        }
+        showLoader();
+        google.script.run.withSuccessHandler(response => {
+            hideLoader();
+            if (response.success) {
+                localStorage.setItem('haiku_name', response.name);
+                showNotification('success', '<ruby>投<rt>とう</rt>稿<rt>こう</rt></ruby>しました！ <ruby>作<rt>さく</rt>品<rt>ひん</rt><ruby>広<rt>ひろ</rt>場<rt>ば</rt></ruby>へどうぞ。');
+                document.getElementById('haiku-form').reset();
+                document.getElementById('author-name').value = response.name;
+            } else {
+                showNotification('error', '<ruby>投<rt>とう</rt>稿<rt>こう</rt></ruby>に<ruby>失<rt>しっ</rt>敗<rt>ぱい</rt></ruby>しました: ' + response.message);
+            }
+        }).withFailureHandler(() => {
+            hideLoader();
+            showNotification('error', '<ruby>通<rt>つう</rt>信<rt>しん</rt></ruby>エラーが<ruby>発<rt>はっ</rt>生<rt>せい</rt></ruby>しました。');
+        }).submitHaiku(name, line1, line2, line3);
+    });
+</script>
+</body>
+</html>
