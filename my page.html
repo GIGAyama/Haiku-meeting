@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>マイページ</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Yuji+Syuku&display=swap" rel="stylesheet">
+    <style>
+        body { 
+            font-family: 'Yuji Syuku', serif;
+            background-color: #fdfaf6; /* 生成色 */
+            color: #333; /* 墨色 */
+        }
+        .header-gradient {
+            background: linear-gradient(135deg, #3c4a6d 0%, #2a3550 100%); /* 藍色 */
+        }
+        .accordion-button {
+            transition: background-color 0.3s;
+        }
+        .accordion-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.5s ease-in-out, padding 0.5s ease-in-out;
+        }
+    </style>
+</head>
+<body class="p-4 md:p-8">
+
+    <?!= HtmlService.createHtmlOutputFromFile('ui_components').getContent(); ?>
+
+    <div class="max-w-4xl mx-auto">
+        <header class="header-gradient text-white p-6 rounded-2xl shadow-xl text-center mb-8">
+            <h1 class="text-3xl md:text-5xl font-bold"><ruby>自<rt>じ</rt>分<rt>ぶん</rt></ruby>の<ruby>作<rt>さく</rt>品<rt>ひん</rt></ruby></h1>
+            <p id="author-name-display" class="mt-2 text-xl"></p>
+        </header>
+
+        <main id="haiku-accordion-container" class="space-y-4">
+            <!-- 投稿した俳句がここに表示されます -->
+        </main>
+        
+        <div id="no-haiku" class="hidden text-center text-xl py-10 bg-white/80 rounded-2xl shadow-lg">
+            <p>まだ<ruby>俳<rt>はい</rt>句<rt>く</rt></ruby>を<ruby>投<rt>とう</rt>稿<rt>こう</rt></ruby>していません。</p>
+            <a href="<?= url ?>?page=index" target="_top" class="mt-6 inline-block bg-purple-700 hover:bg-purple-800 text-white font-bold py-3 px-8 rounded-full transition shadow-lg hover:shadow-xl transform hover:-translate-y-1">
+                <ruby>最<rt>さい</rt>初<rt>しょ</rt></ruby>の<ruby>俳<rt>はい</rt>句<rt>く</rt></ruby>を<ruby>投<rt>とう</rt>稿<rt>こう</rt></ruby>しにいく
+            </a>
+        </div>
+
+        <nav class="text-center mt-12 space-x-4">
+             <a href="<?= url ?>?page=plaza" target="_top" class="bg-blue-700 hover:bg-blue-800 text-white font-bold py-3 px-8 rounded-full transition shadow-lg hover:shadow-xl transform hover:-translate-y-1"><ruby>作<rt>さく</rt>品<rt>ひん</rt><ruby>広<rt>ひろ</rt>場<rt>ば</rt></ruby>へもどる</a>
+        </nav>
+    </div>
+
+<script>
+    window.addEventListener('load', () => {
+        let name = localStorage.getItem('haiku_name');
+        if (!name) {
+            name = prompt("あなたの<ruby>名<rt>な</rt>前<rt>まえ</rt></ruby>（ニックネーム）を<ruby>入<rt>にゅう</rt>力<rt>りょく</rt></ruby>してください", "");
+            if (name) {
+                localStorage.setItem('haiku_name', name);
+            } else {
+                document.getElementById('no-haiku').classList.remove('hidden');
+                return;
+            }
+        }
+        document.getElementById('author-name-display').innerHTML = `（${name}さんの<ruby>作<rt>さく</rt>品<rt>ひん</rt></ruby>）`;
+        loadMyHaiku(name);
+    });
+
+    function loadMyHaiku(name) {
+        showLoader();
+        google.script.run.withSuccessHandler(data => {
+            hideLoader();
+            if (data && data.haikus && data.haikus.length > 0) {
+                renderAccordion(data.haikus);
+            } else {
+                document.getElementById('no-haiku').classList.remove('hidden');
+            }
+        }).withFailureHandler(err => {
+            hideLoader();
+            showNotification('error', '<ruby>作<rt>さく</rt>品<rt>ひん</rt></ruby>の<ruby>読<rt>よ</rt></ruby>み<ruby>込<rt>こ</rt></ruby>みに<ruby>失<rt>しっ</rt>敗<rt>ぱい</rt></ruby>しました。');
+        }).getMyHaiku(name);
+    }
+
+    function renderAccordion(haikus) {
+        const container = document.getElementById('haiku-accordion-container');
+        container.innerHTML = '';
+        haikus.forEach(item => {
+            const div = document.createElement('div');
+            div.className = 'bg-white/80 rounded-2xl shadow-lg overflow-hidden';
+            div.innerHTML = `
+                <button class="accordion-button w-full text-left p-5 hover:bg-gray-100 focus:outline-none">
+                    <div class="flex justify-between items-center">
+                        <span class="text-xl md:text-2xl font-bold">${item.haiku}</span>
+                        <div class="flex items-center gap-4">
+                           <span class="text-xl font-bold text-yellow-600">${item.score} <ruby>点<rt>てん</rt></ruby></span>
+                           <svg class="w-6 h-6 transform transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                        </div>
+                    </div>
+                </button>
+                <div class="accordion-content px-5">
+                    <div class="py-4 border-t">
+                        <h4 class="font-bold text-lg mb-2">もらったコメント</h4>
+                        ${item.comments.length > 0 ? 
+                            item.comments.map(c => `
+                                <div class="border-b last:border-b-0 py-2">
+                                    <p>${c.comment}</p>
+                                    <p class="text-sm text-gray-500 text-right">（${c.commenter}さんより）</p>
+                                </div>`).join('') :
+                            '<p class="text-gray-500">まだコメントはありません。</p>'
+                        }
+                    </div>
+                </div>
+            `;
+            container.appendChild(div);
+        });
+
+        // アコーディオンの開閉機能
+        document.querySelectorAll('.accordion-button').forEach(button => {
+            button.addEventListener('click', () => {
+                const content = button.nextElementSibling;
+                const icon = button.querySelector('svg');
+                if (content.style.maxHeight) {
+                    content.style.maxHeight = null;
+                    content.style.paddingTop = '0';
+                    content.style.paddingBottom = '0';
+                    icon.style.transform = 'rotate(0deg)';
+                } else {
+                    content.style.maxHeight = content.scrollHeight + "px";
+                    content.style.paddingTop = '1rem';
+                    content.style.paddingBottom = '1rem';
+                    icon.style.transform = 'rotate(180deg)';
+                }
+            });
+        });
+    }
+</script>
+</body>
+</html>
