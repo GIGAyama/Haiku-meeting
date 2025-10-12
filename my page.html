@@ -50,6 +50,7 @@
 
         <nav class="text-center mt-12 space-x-4">
              <a href="<?= url ?>?page=plaza" target="_top" class="bg-blue-700 hover:bg-blue-800 text-white font-bold py-3 px-8 rounded-full transition shadow-lg hover:shadow-xl transform hover:-translate-y-1"><ruby>作<rt>さく</rt>品<rt>ひん</rt><ruby>広<rt>ひろ</rt>場<rt>ば</rt></ruby>へもどる</a>
+             <a href="<?= url ?>?page=archives" target="_top" class="bg-green-700 hover:bg-green-800 text-white font-bold py-3 px-8 rounded-full transition shadow-lg hover:shadow-xl transform hover:-translate-y-1"><ruby>過去<rt>かこ</rt></ruby>の<ruby>句会<rt>くかい</rt></ruby>へ</a>
         </nav>
     </div>
 
@@ -90,10 +91,19 @@
         haikus.forEach(item => {
             const div = document.createElement('div');
             div.className = 'bg-white/80 rounded-2xl shadow-lg overflow-hidden';
+            
+            // ★どの句会の句か表示
+            const kukaiNameFormatted = item.kukaiName.replace('俳句_', '【')
+                                          .replace('_', ' ')
+                                          .replace('俳句', '【現在の句会】') + '】';
+
             div.innerHTML = `
                 <button class="accordion-button w-full text-left p-5 hover:bg-gray-100 focus:outline-none">
                     <div class="flex justify-between items-center">
-                        <span class="text-xl md:text-2xl font-bold">${item.haiku}</span>
+                        <div>
+                           <span class="text-sm text-gray-500">${kukaiNameFormatted}</span>
+                           <span class="block text-xl md:text-2xl font-bold mt-1">${item.haiku}</span>
+                        </div>
                         <div class="flex items-center gap-4">
                            <span class="text-xl font-bold text-yellow-600">${item.score} <ruby>点<rt>てん</rt></ruby></span>
                            <svg class="w-6 h-6 transform transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
