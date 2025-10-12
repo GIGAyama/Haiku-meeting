@@ -74,7 +74,36 @@
                 </div>
             </div>
 
-            <!-- ★新機能：句会リセット機能 -->
+            <div class="border-t-2 pt-8">
+                <h2 class="text-2xl font-bold mb-3">データのエクスポート</h2>
+                <p class="mb-4">現在の句会の結果（俳句、作者、得点など）をCSVファイルとしてダウンロードします。</p>
+                <button id="export-csv-btn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg shadow-md transition">
+                    句会の結果をダウンロード (CSV)
+                </button>
+            </div>
+
+            <!-- ★新機能：パスワード変更 -->
+            <div class="border-t-2 pt-8">
+                <h2 class="text-2xl font-bold mb-3">管理者パスワードの変更</h2>
+                <form id="password-change-form" class="space-y-4">
+                    <div>
+                        <label for="current-password" class="block font-bold mb-1">現在のパスワード</label>
+                        <input type="password" id="current-password" class="w-full p-3 border-2 border-gray-300 rounded-lg text-lg focus:ring-2 focus:ring-blue-500" required>
+                    </div>
+                    <div>
+                        <label for="new-password" class="block font-bold mb-1">新しいパスワード</label>
+                        <input type="password" id="new-password" class="w-full p-3 border-2 border-gray-300 rounded-lg text-lg focus:ring-2 focus:ring-blue-500" required>
+                    </div>
+                    <div>
+                        <label for="confirm-password" class="block font-bold mb-1">新しいパスワード（確認用）</label>
+                        <input type="password" id="confirm-password" class="w-full p-3 border-2 border-gray-300 rounded-lg text-lg focus:ring-2 focus:ring-blue-500" required>
+                    </div>
+                    <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-lg shadow-md transition">
+                        パスワードを更新する
+                    </button>
+                </form>
+            </div>
+
             <div class="border-t-2 border-dashed pt-8">
                 <h2 class="text-2xl font-bold mb-3 text-red-800">次回の句会の準備</h2>
                 <p class="mb-4">このボタンを押すと、今回の句会のデータ（俳句、コメント、投票）が保存され、次の句会のためにアプリがリセットされます。<strong class="text-red-700">この操作は元に戻せません。</strong></p>
@@ -143,11 +172,66 @@
     document.getElementById('end-voting-btn').addEventListener('click', () => {
         updateSettings(currentSettings.theme, '投票締切');
     });
+    
+    document.getElementById('export-csv-btn').addEventListener('click', () => {
+        showLoader();
+        google.script.run.withSuccessHandler(csvData => {
+            hideLoader();
+            if (csvData.startsWith('エラー:')) {
+                showNotification('error', 'エクスポートに失敗しました: ' + csvData);
+                return;
+            }
+            const blob = new Blob([csvData], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement("a");
+            const url = URL.createObjectURL(blob);
+            link.setAttribute("href", url);
+            const date = new Date().toISOString().slice(0, 10);
+            link.setAttribute("download", `句会結果_${date}.csv`);
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            showNotification('success', 'CSVファイルをダウンロードしました。');
+        }).withFailureHandler(() => {
+            hideLoader();
+            showNotification('error', 'エクスポートに失敗しました。');
+        }).exportHaikuData();
+    });
 
-    // ★新機能：リセットボタンの処理
+    // ★新機能：パスワード変更フォームの処理
+    document.getElementById('password-change-form').addEventListener('submit', event => {
+        event.preventDefault();
+        const currentPassword = document.getElementById('current-password').value;
+        const newPassword = document.getElementById('new-password').value;
+        const confirmPassword = document.getElementById('confirm-password').value;
+
+        if (newPassword !== confirmPassword) {
+            showNotification('error', '新しいパスワードが一致しません。');
+            return;
+        }
+        
+        if (!newPassword || newPassword.length < 4) {
+            showNotification('error', '新しいパスワードは4文字以上にしてください。');
+            return;
+        }
+
+        showLoader();
+        google.script.run.withSuccessHandler(response => {
+            hideLoader();
+            if (response.success) {
+                showNotification('success', response.message);
+                document.getElementById('password-change-form').reset(); // フォームをリセット
+            } else {
+                showNotification('error', response.message);
+            }
+        }).withFailureHandler(err => {
+            hideLoader();
+            showNotification('error', '通信エラーが発生しました。');
+        }).updateAdminPassword(currentPassword, newPassword);
+    });
+
     const resetConfirmationArea = document.getElementById('reset-confirmation-area');
     document.getElementById('reset-kukai-btn').addEventListener('click', () => {
-        // 確認用のボタンを表示
         resetConfirmationArea.innerHTML = `
             <p class="text-center font-bold text-red-700 mb-2">ほんとうにリセットしますか？</p>
             <div class="flex gap-4">
@@ -156,14 +240,12 @@
             </div>
         `;
 
-        // 「はい」ボタンの処理
         document.getElementById('confirm-reset-btn').addEventListener('click', () => {
             showLoader();
             google.script.run.withSuccessHandler(response => {
                 hideLoader();
                 if(response.success) {
                     showNotification('success', response.message);
-                    // ボタンを元に戻す
                     resetConfirmationArea.innerHTML = '<p class="text-center text-green-700 font-bold">リセットが完了しました。</p>';
                 } else {
                     showNotification('error', response.message);
@@ -171,14 +253,12 @@
             }).resetKukaiData();
         });
 
-        // 「いいえ」ボタンの処理
         document.getElementById('cancel-reset-btn').addEventListener('click', () => {
              resetConfirmationArea.innerHTML = `
                 <button id="reset-kukai-btn" class="w-full bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-3 rounded-lg shadow-md transition">
                     新しい句会を準備する
                 </button>
             `;
-            // イベントリスナーを再設定する必要がある
             document.getElementById('reset-kukai-btn').addEventListener('click', arguments.callee.caller);
         });
     });
