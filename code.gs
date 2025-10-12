@@ -54,6 +54,9 @@ function doGet(e) {
     case 'admin':
       html.setTitle('先生用管理ページ');
       break;
+    case 'archives':
+      html.setTitle('過去の句会');
+      break;
     default:
       html.setTitle('句会アプリ');
   }
@@ -142,46 +145,60 @@ function getKukaiData(voterId) {
 }
 
 /**
- * マイページ（mypage.html）の表示に必要なデータを取得します。
- * 指定された名前の人が投稿した、すべての俳句とそのコメントを取得します。
+ * 指定された名前の人が投稿した、すべての句会のすべての俳句とそのコメントを取得します。
  * @param {string} name - データを取得したい作者名
- * @returns {{haikus: Array<object>}|null} その人の俳句、得点、コメントのリスト。見つからなければnull。
+ * @returns {{haikus: Array<object>}|null} その人の全俳句、得点、コメントのリスト。見つからなければnull。
  */
 function getMyHaiku(name) {
   if (!name) return null;
   
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const haikuSheet = ss.getSheetByName(HAIKU_SHEET_NAME);
-  const commentSheet = ss.getSheetByName(COMMENT_SHEET_NAME);
+  const allSheets = ss.getSheets();
   
-  // 全俳句データと全コメントデータを取得
-  const allHaikuData = haikuSheet.getDataRange().getValues().slice(1);
-  const allCommentData = commentSheet.getDataRange().getValues().slice(1);
-  
-  // 指定された名前の人の俳句だけを抽出
-  const myHaikusData = allHaikuData.filter(row => row[1] === name);
-  
-  if (myHaikusData.length === 0) return null;
+  // 全ての俳句シートとコメントシートを特定
+  const haikuSheets = allSheets.filter(s => s.getName().startsWith(HAIKU_SHEET_NAME));
+  const commentSheets = allSheets.filter(s => s.getName().startsWith(COMMENT_SHEET_NAME));
 
-  // 自分の各俳句に、寄せられたコメントを紐付ける
-  const myHaikusWithComments = myHaikusData.map(haikuRow => {
-    const haikuId = haikuRow[0];
-    const commentsForThisHaiku = allCommentData
-      .filter(commentRow => commentRow[1] == haikuId)
-      .map(commentRow => ({
-          commenter: commentRow[2],
-          comment: commentRow[3]
-      }));
-      
-    return {
-      id: haikuId,
-      haiku: haikuRow[3],
-      score: haikuRow[7],
-      comments: commentsForThisHaiku
-    };
+  let allMyHaikus = [];
+  let allComments = [];
+
+  // 全コメントシートからコメントを読み込む
+  commentSheets.forEach(sheet => {
+    const commentData = sheet.getDataRange().getValues().slice(1);
+    allComments.push(...commentData);
+  });
+  
+  // 全俳句シートをループして、自分の俳句を探す
+  haikuSheets.forEach(sheet => {
+    const haikuData = sheet.getDataRange().getValues().slice(1);
+    const myHaikusData = haikuData.filter(row => row[1] === name);
+    
+    // 見つかった自分の俳句を整形
+    const myHaikusOnSheet = myHaikusData.map(haikuRow => {
+      const haikuId = haikuRow[0];
+      // この俳句IDに紐づくコメントを全コメントから探す
+      const commentsForThisHaiku = allComments
+        .filter(commentRow => commentRow[1] == haikuId)
+        .map(commentRow => ({
+            commenter: commentRow[2],
+            comment: commentRow[3]
+        }));
+        
+      return {
+        id: haikuId,
+        haiku: haikuRow[3],
+        score: haikuRow[7],
+        comments: commentsForThisHaiku,
+        kukaiName: sheet.getName() 
+      };
+    });
+    
+    allMyHaikus.push(...myHaikusOnSheet);
   });
 
-  return { haikus: myHaikusWithComments };
+  if (allMyHaikus.length === 0) return null;
+
+  return { haikus: allMyHaikus };
 }
 
 
@@ -355,7 +372,30 @@ function checkAdminPassword(password) {
 }
 
 /**
- * ★新機能：新しい句会のためにデータをリセットする関数
+ * ★新機能：管理者用パスワードを更新します。
+ * @param {string} currentPassword - 現在のパスワード
+ * @param {string} newPassword - 新しいパスワード
+ * @returns {object} 処理の成功/失敗を示すオブジェクト
+ */
+function updateAdminPassword(currentPassword, newPassword) {
+  try {
+    // まず、現在のパスワードが正しいか検証する
+    const isCorrect = checkAdminPassword(currentPassword);
+    if (!isCorrect) {
+      return { success: false, message: '現在のパスワードが正しくありません。' };
+    }
+    
+    // 新しいパスワードをスクリプトプロパティに保存する
+    PropertiesService.getScriptProperties().setProperty('ADMIN_PASSWORD', newPassword);
+    
+    return { success: true, message: 'パスワードが正常に更新されました。' };
+  } catch (e) {
+    return { success: false, message: `パスワードの更新中にエラーが発生しました: ${e.message}` };
+  }
+}
+
+/**
+ * 新しい句会のためにデータをリセットする関数
  * 現在の「俳句」「コメント」「投票」シートを日付付きでアーカイブ（名前変更）し、
  * 新しい空のシートを作成します。
  * @returns {object} 処理の成功/失敗を示すオブジェクト
@@ -392,3 +432,74 @@ function resetKukaiData() {
   }
 }
 
+// ===============================================================
+// ■ 6. 過去データ閲覧＆エクスポート系
+// ===============================================================
+
+/**
+ * アーカイブされた（過去の）句会シートのリストを取得します。
+ * @returns {Array<string>} 過去の句会シート名の配列
+ */
+function getArchivedKukaiList() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheets = ss.getSheets();
+  const archivePrefix = HAIKU_SHEET_NAME + '_';
+  
+  const archiveList = sheets
+    .map(sheet => sheet.getName())
+    .filter(name => name.startsWith(archivePrefix))
+    .sort() // 日付順に並び替え
+    .reverse(); // 新しいものを上にする
+    
+  return archiveList;
+}
+
+/**
+ * 指定された過去の句会シートから、俳句データを取得します（得点なし）。
+ * @param {string} archiveName - 取得したい過去の句会シート名
+ * @returns {Array<object>} 俳句データの配列
+ */
+function getArchivedKukaiData(archiveName) {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName(archiveName);
+    if (!sheet) {
+      throw new Error("指定された句会が見つかりません。");
+    }
+    const data = sheet.getDataRange().getValues().slice(1);
+    const haikus = data.map(row => ({
+      haiku: row[3],
+      author: row[8] || '（作者名）' // 公開名
+    }));
+    return { success: true, haikus: haikus };
+  } catch(e) {
+    return { success: false, message: e.message };
+  }
+}
+
+/**
+ * 現在の句会の結果をCSV形式の文字列としてエクスポートします。
+ * @returns {string} CSV形式のデータ
+ */
+function exportHaikuData() {
+  try {
+    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(HAIKU_SHEET_NAME);
+    const data = sheet.getDataRange().getValues();
+    
+    // データをCSV文字列に変換
+    const csvContent = data.map(row => 
+      row.map(cell => {
+        // セル内のカンマや改行を考慮
+        let stringCell = String(cell);
+        if (stringCell.includes(',') || stringCell.includes('"') || stringCell.includes('\n')) {
+          return `"${stringCell.replace(/"/g, '""')}"`;
+        }
+        return stringCell;
+      }).join(',')
+    ).join('\n');
+    
+    return csvContent;
+  } catch (e) {
+    return `エラー: ${e.message}`;
+  }
+}
