@@ -1,287 +1,171 @@
 /**
- * @fileoverview 句会アプリのサーバーサイドロジックを管理するスクリプト。
- * データベース（Googleスプレッドシート）との連携、Webページの表示、
- * 俳句・投票・コメントのデータ処理など、アプリの頭脳となる部分を担当します。
+ * =========================================================================
+ * GIGA句会プラザ - バックエンド (GAS)
+ * =========================================================================
  */
 
-// ===============================================================
-// ■ 1. 初期設定
-// アプリケーション全体で共通して使用する基本的な設定です。
-// ===============================================================
+function getDbSpreadsheet() {
+  const props = PropertiesService.getScriptProperties();
+  let dbId = props.getProperty('DB_SPREADSHEET_ID');
 
-// データベースとして利用するスプレッドシートの各シート名を設定します。
-const HAIKU_SHEET_NAME = '俳句';
-const COMMENT_SHEET_NAME = 'コメント';
-const VOTE_SHEET_NAME = '投票';
-const SETTINGS_SHEET_NAME = '設定';
+  if (!dbId) {
+    const lock = LockService.getScriptLock();
+    try {
+      lock.waitLock(30000);
+      dbId = props.getProperty('DB_SPREADSHEET_ID');
+      
+      if (!dbId) {
+        const ss = SpreadsheetApp.create('【自動生成】GIGA句会プラザ_DB');
+        dbId = ss.getId();
+        props.setProperty('DB_SPREADSHEET_ID', dbId);
+        props.setProperty('ADMIN_PASSWORD', '1234');
 
+        const sheet1 = ss.getSheets()[0];
+        sheet1.setName('設定');
+        sheet1.appendRow(['お題', '投票状況']);
+        sheet1.appendRow(['自由律', '投票受付中']);
+        
+        const sheet2 = ss.insertSheet('俳句');
+        // J列（10列目）に非表示(ミュート)フラグを隠しデータとして持ちます
+        sheet2.appendRow(['ID', '名前', '投稿日時', '俳句', '上の句', '中の句', '下の句', '得点', '公開名', 'ミュート']);
+        
+        const sheet3 = ss.insertSheet('コメント');
+        sheet3.appendRow(['投稿日時', '俳句ID', 'コメント投稿者', 'コメント']);
+        
+        const sheet4 = ss.insertSheet('投票');
+        sheet4.appendRow(['投票日時', '俳句ID', '点数', '投票者ID']);
+        
+        ss.getSheets().forEach(s => s.getRange('A1:J1').setBackground('#f3f4f6'));
+      }
+    } catch (e) {
+      throw new Error('アクセスが集中しています。少し待ってから再度読み込んでください。');
+    } finally {
+      lock.releaseLock();
+    }
+  }
+  return SpreadsheetApp.openById(dbId);
+}
 
-// ===============================================================
-// ■ 2. メイン処理 (Webページ表示)
-// ユーザーがWebアプリのURLにアクセスしたときに、どのHTMLページを表示するかを決定します。
-// ===============================================================
-
-/**
- * Webアプリケーションにアクセスがあったときに呼ばれるメインの関数です。
- * URLのパラメータ（?page=...）に応じて、表示するHTMLページを切り替えます。
- * @param {object} e - URLパラメータなどの情報を持つオブジェクト
- * @returns {HtmlOutput} - ブラウザに表示するHTMLコンテンツ
- */
 function doGet(e) {
-  // URLに ?page=... の指定がなければ、最初のページ 'index' を表示します。
-  const page = e.parameter.page || 'index';
-  
-  // 指定された名前のHTMLファイルから、テンプレート（雛形）を作成します。
-  const template = HtmlService.createTemplateFromFile(page);
-
-  // HTML側でページのURLを使えるように、URLをテンプレートに渡します。
-  template.url = ScriptApp.getService().getUrl();
-
-  // テンプレートからHTMLコンテンツを生成します。
-  const html = template.evaluate();
-
-  // 表示するページに応じて、ブラウザのタブに表示されるタイトルを設定します。
-  switch (page) {
-    case 'index':
-      html.setTitle('俳句を投稿しよう');
-      break;
-    case 'plaza':
-      html.setTitle('作品広場');
-      break;
-    case 'mypage':
-      html.setTitle('マイページ');
-      break;
-    case 'admin':
-      html.setTitle('先生用管理ページ');
-      break;
-    case 'archives':
-      html.setTitle('過去の句会');
-      break;
-    default:
-      html.setTitle('句会アプリ');
-  }
-
-  return html;
+  getDbSpreadsheet();
+  const template = HtmlService.createTemplateFromFile('index');
+  return template.evaluate()
+    .setTitle('GIGA句会プラザ')
+    .addMetaTag('viewport', 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no')
+    .setFaviconUrl('https://drive.google.com/uc?id=14xzbLO7mLg2hy85PBQNnj0lir-gi2Uky.&png');
 }
 
-
-// ===============================================================
-// ■ 3. データ取得系の関数
-// HTMLページ（ブラウザ）からの要求に応じて、スプレッドシートから情報を読み取り、
-// ページに表示するためのデータを準備して返します。
-// ===============================================================
-
-/**
- * 「設定」シートから、現在のお題と投票状況を取得します。
- * 主に管理ページと作品広場で使用されます。
- * @returns {object} 現在のお題と投票状況を持つオブジェクト
- */
-function getAdminData() {
-  try {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const settingsSheet = ss.getSheetByName(SETTINGS_SHEET_NAME);
-    const theme = settingsSheet.getRange('A2').getValue();
-    const votingStatus = settingsSheet.getRange('B2').getValue();
-    return {
-      theme: theme || '未設定',
-      votingStatus: votingStatus || '投票受付中'
-    };
-  } catch (e) {
-    // もしエラーが発生したら、エラーであることが分かるようにします。
-    return { theme: 'エラー', votingStatus: 'エラー' };
-  }
-}
-
-/**
- * 作品広場（plaza.html）の表示に必要なすべてのデータを取得します。
- * @param {string} voterId - 投票者を識別するための一意のID
- * @returns {object} 俳句、コメント、自分の投票履歴など、作品広場で必要な情報の詰め合わせ
- */
-function getKukaiData(voterId) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const haikuSheet = ss.getSheetByName(HAIKU_SHEET_NAME);
-  const commentSheet = ss.getSheetByName(COMMENT_SHEET_NAME);
-  const voteSheet = ss.getSheetByName(VOTE_SHEET_NAME);
-  
-  // 「俳句」シートからすべての俳句データを取得します。
-  // .slice(1) は、1行目の見出しを除外するためのおまじないです。
-  const haikuData = haikuSheet.getDataRange().getValues().slice(1);
-  const haikus = haikuData.map(row => ({
-    id: row[0],
-    author: row[1], // 自分の句かどうかを判定するために使用
-    haiku: row[3],  // 俳句の全文
-    line1: row[4],  // 上の句
-    line2: row[5],  // 中の句
-    line3: row[6],  // 下の句
-    score: row[7],  // 現在の得点
-    name: row[8] || '（作者名）' // 投票締切後に表示する名前
-  }));
-
-  // 「コメント」シートからすべてのコメントデータを取得します。
-  const commentData = commentSheet.getDataRange().getValues().slice(1);
-  const comments = commentData.map(row => ({
-    haikuId: row[1],
-    commenter: row[2], // コメントした人の名前
-    comment: row[3]    // コメントの内容
-  }));
-  
-  // 「投票」シートから、このユーザーが過去にどの作品に投票したかの履歴を取得します。
-  const voteData = voteSheet.getDataRange().getValues().slice(1);
-  const myVotes = voteData
-    .filter(row => row[3] === voterId) // 自分のIDと一致する行だけを絞り込み
-    .map(row => ({ haikuId: row[1], score: row[2] }));
-
-  // 管理データを取得します。
-  const adminData = getAdminData();
-
-  // これらすべての情報をまとめて、HTML側に返します。
+function getSettingsData() {
+  const ss = getDbSpreadsheet();
+  const sheet = ss.getSheetByName('設定');
   return {
-    haikus: haikus,
-    comments: comments,
-    myVotes: myVotes, // 自分の投票履歴を追加
-    theme: adminData.theme,
-    votingStatus: adminData.votingStatus
+    theme: sheet.getRange('A2').getValue() || '自由律',
+    votingStatus: sheet.getRange('B2').getValue() || '投票受付中'
   };
 }
 
-/**
- * 指定された名前の人が投稿した、すべての句会のすべての俳句とそのコメントを取得します。
- * @param {string} name - データを取得したい作者名
- * @returns {{haikus: Array<object>}|null} その人の全俳句、得点、コメントのリスト。見つからなければnull。
- */
-function getMyHaiku(name) {
-  if (!name) return null;
-  
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const allSheets = ss.getSheets();
-  
-  // 全ての俳句シートとコメントシートを特定
-  const haikuSheets = allSheets.filter(s => s.getName().startsWith(HAIKU_SHEET_NAME));
-  const commentSheets = allSheets.filter(s => s.getName().startsWith(COMMENT_SHEET_NAME));
+function getPlazaData(voterId) {
+  const ss = getDbSpreadsheet();
+  const haikuData = ss.getSheetByName('俳句').getDataRange().getValues().slice(1);
+  const commentData = ss.getSheetByName('コメント').getDataRange().getValues().slice(1);
+  const voteData = ss.getSheetByName('投票').getDataRange().getValues().slice(1);
+  const settings = getSettingsData();
 
-  let allMyHaikus = [];
-  let allComments = [];
-
-  // 全コメントシートからコメントを読み込む
-  commentSheets.forEach(sheet => {
-    const commentData = sheet.getDataRange().getValues().slice(1);
-    allComments.push(...commentData);
-  });
-  
-  // 全俳句シートをループして、自分の俳句を探す
-  haikuSheets.forEach(sheet => {
-    const haikuData = sheet.getDataRange().getValues().slice(1);
-    const myHaikusData = haikuData.filter(row => row[1] === name);
-    
-    // 見つかった自分の俳句を整形
-    const myHaikusOnSheet = myHaikusData.map(haikuRow => {
-      const haikuId = haikuRow[0];
-      // この俳句IDに紐づくコメントを全コメントから探す
-      const commentsForThisHaiku = allComments
-        .filter(commentRow => commentRow[1] == haikuId)
-        .map(commentRow => ({
-            commenter: commentRow[2],
-            comment: commentRow[3]
-        }));
-        
-      return {
-        id: haikuId,
-        haiku: haikuRow[3],
-        score: haikuRow[7],
-        comments: commentsForThisHaiku,
-        kukaiName: sheet.getName() 
-      };
-    });
-    
-    allMyHaikus.push(...myHaikusOnSheet);
+  const haikus = [];
+  haikuData.forEach(row => {
+    // J列(インデックス9)がtrueのものはミュートされているので広場には送らない
+    const isMuted = row[9] === true || String(row[9]).toUpperCase() === 'TRUE';
+    if (!isMuted) {
+      haikus.push({
+        id: row[0],
+        author: row[1],
+        date: row[2] ? String(row[2]) : '', 
+        haiku: row[3],
+        line1: row[4],
+        line2: row[5],
+        line3: row[6],
+        score: row[7] || 0,
+        publicName: row[8] || ''
+      });
+    }
   });
 
-  if (allMyHaikus.length === 0) return null;
+  const comments = commentData.map(row => ({ haikuId: row[1], commenter: row[2], comment: row[3] }));
+  const myVotes = voteData.filter(row => String(row[3]) === String(voterId)).map(row => ({ haikuId: row[1], score: row[2] }));
 
-  return { haikus: allMyHaikus };
+  return { haikus, comments, myVotes, settings };
 }
 
+function getMyHaikus(authorName) {
+  const ss = getDbSpreadsheet();
+  const sheets = ss.getSheets();
+  const myHaikus = [];
 
-// ===============================================================
-// ■ 4. データ更新・登録系の関数
-// HTMLページからの指示で、スプレッドシートに新しいデータを書き込んだり、
-// 既存のデータを更新したりします。
-// ===============================================================
+  const commentSheetsData = [];
+  sheets.filter(s => s.getName().startsWith('コメント')).forEach(s => {
+    commentSheetsData.push(...s.getDataRange().getValues().slice(1));
+  });
 
-/**
- * 新しい俳句をスプレッドシートに投稿（登録）します。
- * @param {string} name - 投稿者の名前
- * @param {string} line1 - 上の句
- * @param {string} line2 - 中の句
- * @param {string} line3 - 下の句
- * @returns {object} 処理が成功したかどうかと、投稿者名
- */
+  sheets.filter(s => s.getName().startsWith('俳句')).forEach(sheet => {
+    const data = sheet.getDataRange().getValues().slice(1);
+    const filtered = data.filter(row => row[1] === authorName);
+    
+    filtered.forEach(row => {
+      const haikuId = row[0];
+      const comments = commentSheetsData.filter(c => c[1] === haikuId).map(c => ({ commenter: c[2], comment: c[3] }));
+      myHaikus.push({
+        id: haikuId,
+        kukaiName: sheet.getName() === '俳句' ? '【現在の句会】' : `【過去】${sheet.getName().replace('俳句_', '')}`,
+        haiku: row[3],
+        score: row[7] || 0,
+        comments: comments
+      });
+    });
+  });
+  return myHaikus;
+}
+
+function getArchiveList() {
+  const ss = getDbSpreadsheet();
+  return ss.getSheets().map(s => s.getName()).filter(name => name.startsWith('俳句_')).sort().reverse();
+}
+
+function getArchiveData(sheetName) {
+  const ss = getDbSpreadsheet();
+  const sheet = ss.getSheetByName(sheetName);
+  if (!sheet) return [];
+  const data = sheet.getDataRange().getValues().slice(1);
+  return data.map(row => ({ haiku: row[3], publicName: row[8] || '（作者非公開）' }));
+}
+
 function submitHaiku(name, line1, line2, line3) {
   try {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const sheet = ss.getSheetByName(HAIKU_SHEET_NAME);
+    const ss = getDbSpreadsheet();
+    const sheet = ss.getSheetByName('俳句');
     const haikuText = `${line1} ${line2} ${line3}`;
-    
-    // 新しい俳句IDを決定します（最後の俳句のID + 1）。
-    const lastId = sheet.getLastRow() > 1 ? sheet.getRange(sheet.getLastRow(), 1).getValue() : 0;
-    const newId = lastId + 1;
-    
-    // スプレッドシートの最終行に、新しい俳句の情報を追加します。
-    const newRow = [
-      newId, name, new Date(), haikuText, 
-      line1, line2, line3, 
-      0, "" // score and published name
-    ];
-    sheet.appendRow(newRow);
-
+    const newId = new Date().getTime();
+    sheet.appendRow([newId, name, new Date(), haikuText, line1, line2, line3, 0, "", false]);
     return { success: true, name: name };
-  } catch (e) {
-    return { success: false, message: e.message };
-  }
+  } catch (e) { return { success: false, message: e.message }; }
 }
 
-/**
- * 投票をスプレッドシートに記録し、俳句の得点を更新します。
- * @param {number} haikuId - 投票対象の俳句ID
- * @param {number} score - 投票する点数 (3:金賞, 2:銀賞, 1:銅賞)
- * @param {string} voterId - 投票者の一意のID
- * @returns {object} 処理の成功/失敗を示すオブジェクト
- */
 function submitVote(haikuId, score, voterId) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const voteSheet = ss.getSheetByName(VOTE_SHEET_NAME);
-  const haikuSheet = ss.getSheetByName(HAIKU_SHEET_NAME);
-  
-  // 複数人が同時に投票してもデータが壊れないように、処理をロックします。
   const lock = LockService.getScriptLock();
-  lock.waitLock(10000); // 最大10秒待機
-
+  lock.waitLock(10000);
   try {
-    const voteData = voteSheet.getDataRange().getValues();
-    const haikuData = haikuSheet.getDataRange().getValues();
+    const ss = getDbSpreadsheet();
+    const voteSheet = ss.getSheetByName('投票');
+    const haikuSheet = ss.getSheetByName('俳句');
     
-    const voterVotes = voteData.filter(row => row[3] === voterId);
+    const voteData = voteSheet.getDataRange().getValues();
+    const myVotes = voteData.filter(row => String(row[3]) === String(voterId));
 
-    // ルールチェック1：自分の作品への投票はできない
-    const targetHaiku = haikuData.find(row => row[0] == haikuId);
-    const authorName = targetHaiku ? targetHaiku[1] : null;
-    const voterName = haikuData.find(row => row[1] === authorName) ? authorName : null; // This logic needs to be better
-    // This check is imperfect, client-side check is primary.
+    if (myVotes.some(row => row[2] == score)) throw new Error('その賞は既に投票済みです。');
+    if (myVotes.some(row => row[1] == haikuId)) throw new Error('同じ作品には1回しか投票できません。');
 
-    // ルールチェック2：同じ賞（金賞など）は1回しか投票できない
-    if (voterVotes.some(row => row[2] == score)) {
-      const awardName = {3:'金賞', 2:'銀賞', 1:'銅賞'}[score];
-      return { success: false, message: `もう${awardName}は投票済みです。` };
-    }
-    // ルールチェック3：同じ作品に複数回投票はできない
-    if (voterVotes.some(row => row[1] == haikuId)) {
-      return { success: false, message: '同じ作品には一度しか投票できません。' };
-    }
-
-    // 「投票」シートに投票履歴を記録します。
     voteSheet.appendRow([new Date(), haikuId, score, voterId]);
     
-    // 「俳句」シートの合計得点を更新します。
+    const haikuData = haikuSheet.getDataRange().getValues();
     for (let i = 1; i < haikuData.length; i++) {
       if (haikuData[i][0] == haikuId) {
         const currentScore = haikuData[i][7] || 0;
@@ -290,216 +174,121 @@ function submitVote(haikuId, score, voterId) {
       }
     }
     return { success: true };
-
-  } catch (e) {
-    return { success: false, message: e.message };
-  } finally {
-    // 処理が終わったら、必ずロックを解除します。
-    lock.releaseLock();
-  }
+  } catch (e) { return { success: false, message: e.message }; } finally { lock.releaseLock(); }
 }
 
-/**
- * コメントをスプレッドシートに投稿します。
- * @param {number} haikuId - コメント対象の俳句ID
- * @param {string} comment - コメントの内容
- * @param {string} commenterName - コメントした人の名前
- * @returns {object} 処理の成功/失敗を示すオブジェクト
- */
 function submitComment(haikuId, comment, commenterName) {
   try {
-    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(COMMENT_SHEET_NAME);
-    sheet.appendRow([new Date(), haikuId, commenterName, comment]);
+    const ss = getDbSpreadsheet();
+    ss.getSheetByName('コメント').appendRow([new Date(), haikuId, commenterName, comment]);
     return { success: true };
-  } catch (e) {
-    return { success: false, message: e.message };
-  }
+  } catch (e) { return { success: false, message: e.message }; }
 }
 
-
-// ===============================================================
-// ■ 5. 管理機能系の関数
-// 教師用の管理ページから呼び出される機能です。
-// ===============================================================
-
-/**
- * 教師用管理ページからの設定をスプレッドシートに反映します。
- * @param {string} theme - 新しいお題
- * @param {string} votingStatus - 新しい投票状況
- * @returns {object} 処理の成功/失敗を示すオブジェクト
- */
-function updateAdminSettings(theme, votingStatus) {
-  try {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const settingsSheet = ss.getSheetByName(SETTINGS_SHEET_NAME);
-    const haikuSheet = ss.getSheetByName(HAIKU_SHEET_NAME);
-
-    // 「設定」シートのお題と投票状況を更新します。
-    settingsSheet.getRange('A2').setValue(theme);
-    settingsSheet.getRange('B2').setValue(votingStatus);
-
-    // もし「投票締切」に設定されたら、作者名を公開する処理を行います。
-    if (votingStatus === '投票締切') {
-        const lastRow = haikuSheet.getLastRow();
-        if (lastRow > 1) {
-          const authorNames = haikuSheet.getRange('B2:B' + lastRow).getValues();
-          haikuSheet.getRange('I2:I' + lastRow).setValues(authorNames);
-        }
-    } else {
-        // もし「投票受付中」に戻されたら、公開名をクリアします。
-        const lastRow = haikuSheet.getLastRow();
-        if (lastRow > 1) {
-          const range = haikuSheet.getRange('I2:I' + lastRow);
-          range.clearContent();
-        }
-    }
-    
-    return { success: true };
-  } catch (e) {
-    return { success: false, message: e.message };
-  }
-}
-
-/**
- * 入力されたパスワードが、設定された管理者用パスワードと一致するか確認します。
- * @param {string} password - 入力されたパスワード
- * @returns {boolean} パスワードが一致すればtrue、しなければfalse
- */
+// -------------------------------------------------------------------------
+// 5. 管理者API (神アプリアップデート版)
+// -------------------------------------------------------------------------
 function checkAdminPassword(password) {
-  // スクリプトプロパティに保存された、安全なパスワードを取得します。
-  const correctPassword = PropertiesService.getScriptProperties().getProperty('ADMIN_PASSWORD');
-  return password === correctPassword;
+  const props = PropertiesService.getScriptProperties();
+  return password === props.getProperty('ADMIN_PASSWORD');
 }
 
-/**
- * ★新機能：管理者用パスワードを更新します。
- * @param {string} currentPassword - 現在のパスワード
- * @param {string} newPassword - 新しいパスワード
- * @returns {object} 処理の成功/失敗を示すオブジェクト
- */
-function updateAdminPassword(currentPassword, newPassword) {
+function updateSettings(theme, status) {
   try {
-    // まず、現在のパスワードが正しいか検証する
-    const isCorrect = checkAdminPassword(currentPassword);
-    if (!isCorrect) {
-      return { success: false, message: '現在のパスワードが正しくありません。' };
+    const ss = getDbSpreadsheet();
+    const settingsSheet = ss.getSheetByName('設定');
+    const haikuSheet = ss.getSheetByName('俳句');
+    settingsSheet.getRange('A2').setValue(theme);
+    settingsSheet.getRange('B2').setValue(status);
+
+    const lastRow = haikuSheet.getLastRow();
+    if (lastRow > 1) {
+      if (status === '投票締切') {
+        const authorNames = haikuSheet.getRange('B2:B' + lastRow).getValues();
+        haikuSheet.getRange('I2:I' + lastRow).setValues(authorNames);
+      } else {
+        haikuSheet.getRange('I2:I' + lastRow).clearContent();
+      }
     }
-    
-    // 新しいパスワードをスクリプトプロパティに保存する
-    PropertiesService.getScriptProperties().setProperty('ADMIN_PASSWORD', newPassword);
-    
-    return { success: true, message: 'パスワードが正常に更新されました。' };
-  } catch (e) {
-    return { success: false, message: `パスワードの更新中にエラーが発生しました: ${e.message}` };
-  }
+    return { success: true };
+  } catch (e) { return { success: false, message: e.message }; }
 }
 
-/**
- * 新しい句会のためにデータをリセットする関数
- * 現在の「俳句」「コメント」「投票」シートを日付付きでアーカイブ（名前変更）し、
- * 新しい空のシートを作成します。
- * @returns {object} 処理の成功/失敗を示すオブジェクト
- */
-function resetKukaiData() {
-  try {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const timezone = ss.getSpreadsheetTimeZone();
-    const timestamp = Utilities.formatDate(new Date(), timezone, 'yyyy-MM-dd_HH-mm');
+function changeAdminPassword(oldPass, newPass) {
+  if (checkAdminPassword(oldPass)) {
+    PropertiesService.getScriptProperties().setProperty('ADMIN_PASSWORD', newPass);
+    return { success: true, message: 'パスワードを更新しました。' };
+  }
+  return { success: false, message: '現在のパスワードが違います。' };
+}
 
-    const sheetsToArchive = [HAIKU_SHEET_NAME, COMMENT_SHEET_NAME, VOTE_SHEET_NAME];
+// 新規追加：ダッシュボード用データの一括取得
+function getAdminDashboardData() {
+  const ss = getDbSpreadsheet();
+  const haikuSheet = ss.getSheetByName('俳句');
+  const commentSheet = ss.getSheetByName('コメント');
+  const voteSheet = ss.getSheetByName('投票');
+  
+  const haikuData = haikuSheet.getDataRange().getValues().slice(1);
+  const haikus = haikuData.map(r => ({
+    id: r[0], author: r[1], haiku: r[3], score: r[7]||0, isMuted: r[9] === true || String(r[9]).toUpperCase() === 'TRUE'
+  }));
+  
+  const authors = [...new Set(haikus.map(h => h.author))];
+  const commentsCount = Math.max(0, commentSheet.getLastRow() - 1);
+  const votesCount = Math.max(0, voteSheet.getLastRow() - 1);
+  const settings = getSettingsData();
+  
+  return {
+    haikus: haikus.reverse(), // 新しいものを上に
+    stats: { haikuCount: haikus.length, authorCount: authors.length, commentsCount, votesCount },
+    settings: settings
+  };
+}
+
+// 新規追加：不適切コンテンツのワンタップミュート
+function toggleMuteHaiku(haikuId, muteStatus) {
+  try {
+    const ss = getDbSpreadsheet();
+    const sheet = ss.getSheetByName('俳句');
+    const data = sheet.getDataRange().getValues();
+    for (let i = 1; i < data.length; i++) {
+      if (data[i][0] == haikuId) {
+        sheet.getRange(i + 1, 10).setValue(muteStatus); // J列にセット
+        return { success: true };
+      }
+    }
+    return { success: false, message: '対象が見つかりませんでした' };
+  } catch(e) { return { success: false, message: e.message }; }
+}
+
+function resetKukai() {
+  try {
+    const ss = getDbSpreadsheet();
+    const timestamp = Utilities.formatDate(new Date(), ss.getSpreadsheetTimeZone(), 'yyyy-MM-dd_HH-mm');
     
-    // 既存のシートをリネームしてアーカイブ
-    sheetsToArchive.forEach(sheetName => {
-      const sheet = ss.getSheetByName(sheetName);
-      if (sheet) {
-        sheet.setName(`${sheetName}_${timestamp}`);
+    ['俳句', 'コメント', '投票'].forEach(name => {
+      const sheet = ss.getSheetByName(name);
+      if (sheet) sheet.setName(`${name}_${timestamp}`);
+    });
+
+    const s1 = ss.insertSheet('俳句', 1);
+    s1.appendRow(['ID', '名前', '投稿日時', '俳句', '上の句', '中の句', '下の句', '得点', '公開名', 'ミュート']);
+    
+    const s2 = ss.insertSheet('コメント', 2);
+    s2.appendRow(['投稿日時', '俳句ID', 'コメント投稿者', 'コメント']);
+    
+    const s3 = ss.insertSheet('投票', 3);
+    s3.appendRow(['投票日時', '俳句ID', '点数', '投票者ID']);
+
+    ss.getSheets().forEach(s => {
+      if(s.getName() === '俳句' || s.getName() === 'コメント' || s.getName() === '投票') {
+        s.getRange('A1:J1').setBackground('#f3f4f6');
       }
     });
 
-    // 新しいシートを作成し、ヘッダーを書き込む
-    const haikuSheet = ss.insertSheet(HAIKU_SHEET_NAME, 0); // 0は先頭に追加
-    haikuSheet.appendRow(['ID', '名前', '投稿日時', '俳句', '上の句', '中の句', '下の句', '得点', '公開名']);
-    
-    const commentSheet = ss.insertSheet(COMMENT_SHEET_NAME, 1);
-    commentSheet.appendRow(['投稿日時', '俳句ID', 'コメント投稿者', 'コメント']);
-    
-    const voteSheet = ss.insertSheet(VOTE_SHEET_NAME, 2);
-    voteSheet.appendRow(['投票日時', '俳句ID', '点数', '投票者ID']);
-
-    return { success: true, message: '新しい句会の準備ができました。' };
-  } catch (e) {
-    return { success: false, message: `リセット処理中にエラーが発生しました: ${e.message}` };
-  }
-}
-
-// ===============================================================
-// ■ 6. 過去データ閲覧＆エクスポート系
-// ===============================================================
-
-/**
- * アーカイブされた（過去の）句会シートのリストを取得します。
- * @returns {Array<string>} 過去の句会シート名の配列
- */
-function getArchivedKukaiList() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheets = ss.getSheets();
-  const archivePrefix = HAIKU_SHEET_NAME + '_';
-  
-  const archiveList = sheets
-    .map(sheet => sheet.getName())
-    .filter(name => name.startsWith(archivePrefix))
-    .sort() // 日付順に並び替え
-    .reverse(); // 新しいものを上にする
-    
-  return archiveList;
-}
-
-/**
- * 指定された過去の句会シートから、俳句データを取得します（得点なし）。
- * @param {string} archiveName - 取得したい過去の句会シート名
- * @returns {Array<object>} 俳句データの配列
- */
-function getArchivedKukaiData(archiveName) {
-  try {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const sheet = ss.getSheetByName(archiveName);
-    if (!sheet) {
-      throw new Error("指定された句会が見つかりません。");
-    }
-    const data = sheet.getDataRange().getValues().slice(1);
-    const haikus = data.map(row => ({
-      haiku: row[3],
-      author: row[8] || '（作者名）' // 公開名
-    }));
-    return { success: true, haikus: haikus };
-  } catch(e) {
-    return { success: false, message: e.message };
-  }
-}
-
-/**
- * 現在の句会の結果をCSV形式の文字列としてエクスポートします。
- * @returns {string} CSV形式のデータ
- */
-function exportHaikuData() {
-  try {
-    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(HAIKU_SHEET_NAME);
-    const data = sheet.getDataRange().getValues();
-    
-    // データをCSV文字列に変換
-    const csvContent = data.map(row => 
-      row.map(cell => {
-        // セル内のカンマや改行を考慮
-        let stringCell = String(cell);
-        if (stringCell.includes(',') || stringCell.includes('"') || stringCell.includes('\n')) {
-          return `"${stringCell.replace(/"/g, '""')}"`;
-        }
-        return stringCell;
-      }).join(',')
-    ).join('\n');
-    
-    return csvContent;
-  } catch (e) {
-    return `エラー: ${e.message}`;
-  }
+    const setSheet = ss.getSheetByName('設定');
+    setSheet.getRange('B2').setValue('投票受付中');
+    return { success: true, message: '新しい句会の準備が完了しました！' };
+  } catch (e) { return { success: false, message: e.message }; }
 }
