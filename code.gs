@@ -46,12 +46,24 @@ function getDbSpreadsheet() {
   return SpreadsheetApp.openById(dbId);
 }
 
+/**
+ * ほかの .html ファイルを index.html に差し込む。
+ * GAS は .gs と .html しか置けないので、CSS も JavaScript も .html に包んで持つ。
+ */
+function include(filename) {
+  return HtmlService.createHtmlOutputFromFile(filename).getContent();
+}
+
 function doGet(e) {
   getDbSpreadsheet();
   const template = HtmlService.createTemplateFromFile('index');
   return template.evaluate()
     .setTitle('GIGA句会プラザ')
-    .addMetaTag('viewport', 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no')
+    // 拡大は禁止しない。maximum-scale=1.0 と user-scalable=no を入れると、
+    // 見えづらい子が画面を大きくできなくなる。
+    // viewport-fit=cover は、切り欠きのある端末で安全領域を CSS から使うために要る。
+    // GAS は画面を iframe で包むため、index.html の <meta> だけでは足りず、ここにも要る。
+    .addMetaTag('viewport', 'width=device-width, initial-scale=1.0, viewport-fit=cover')
     .setFaviconUrl('https://drive.google.com/uc?id=14xzbLO7mLg2hy85PBQNnj0lir-gi2Uky.&png');
 }
 

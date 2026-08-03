@@ -1,0 +1,74 @@
+/* もとから index.html に書いてあったスタイル。Tailwind の出力のあとに置く。 */
+body {
+  /* Yuji Syuku は Google Fonts から読む。学校のフィルタリングで塞がれても
+     字が崩れないよう、端末側の明朝体を後ろに並べる。 */
+  font-family: 'Yuji Syuku', 'Hiragino Mincho ProN', 'Yu Mincho', 'Noto Serif JP', serif;
+  background-color: #fdfaf6;
+  color: #333;
+  overflow: hidden;
+  /* 児童が画面を連打するので、素早い連打で勝手に拡大するのだけ止める。
+     二本指で広げる余地は残す（見えづらい子が拡大できなくなるため）。 */
+  touch-action: manipulation;
+  /* 切り欠きのある端末やホームバーに、中身が潜り込まないようにする */
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.tanzaku { writing-mode: vertical-rl; text-orientation: upright; border-top: 6px solid #d9534f; }
+
+ruby { ruby-align: center; ruby-position: over; vertical-align: baseline; line-height: inherit; }
+
+/* ふりがな。色を決め打ちにすると、色のついた面に重ねたとき読めなくなる。
+   下地が色つきのところでは、下の文字と同じ色を継がせる。 */
+rt { font-size: 0.55em; color: #5b6472; font-family: sans-serif; line-height: 1; user-select: none; }
+button rt,
+[class*="bg-"] rt,
+[class*="text-white"] rt { color: inherit; }
+
+::-webkit-scrollbar { width: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+/* 画面いっぱいに広げるものは 100vh ではなく 100dvh を使う。
+   iPad の Safari と Android の Chrome では、アドレスバーが出入りするぶん
+   100vh が実際の表示領域より大きくなり、いちばん下のボタンが隠れて押せなくなる。 */
+.h-screen { height: 100dvh; }
+@supports not (height: 100dvh) {
+  .h-screen { height: 100vh; }
+}
+
+/* 動きに酔いやすい子・前庭障害のある子のための設定を尊重する。
+   0 にすると animation-fill-mode: forwards が効かず、fade-in を使っている
+   ところが opacity:0 のまま消えるので、ごく短い時間を残す。 */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Windows のハイコントラストモード。色で区別している境目が消えるので枠線を出す */
+@media (forced-colors: active) {
+  button, input, select, textarea { border: 1px solid ButtonText; }
+}
+
+/* キーボードで操作しているときだけ、はっきりした枠を出す */
+:focus-visible { outline: 3px solid #7f1d1d; outline-offset: 2px; }
+
+/* 押せるものは、見た目を変えずに当たり判定だけ 44px 以上にする */
+.tap-44 { position: relative; }
+.tap-44::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 100%;
+  height: 100%;
+  min-width: 44px;
+  min-height: 44px;
+}
