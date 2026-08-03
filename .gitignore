@@ -1,0 +1,5 @@
+node_modules/
+
+# tools/build.mjs が Tailwind CLI に書かせる中間ファイル。
+# 配信するのは css.html のほうなので、こちらは追跡しない。
+tools/tailwind-output.css

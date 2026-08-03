@@ -113,3 +113,28 @@ GIGA句会プラザは、プログラミング知識ゼロの先生でも**「�
 This project is licensed under the MIT License - see the [LICENSE](https://www.google.com/search?q=LICENSE "null") file for details.
 
 *Created with passion for GIGA School Concept by GIGA山*
+
+---
+
+## 開発者向け
+
+画面は React + Tailwind で作っていますが、**CDN は使っていません。**
+学校のフィルタリングで CDN が塞がれると画面が一切出なくなるため、
+必要なものは先に作って GAS 側に置いています。
+
+```bash
+npm ci
+npm run build   # app.html / css.html / vendor.html を作り直す
+```
+
+| ファイル | 中身 | 編集してよいか |
+|---|---|---|
+| `src/app.jsx` | 画面本体（JSX） | **ここを直す** |
+| `tools/extra.css` | Tailwind に無い追加のスタイル | ここを直す |
+| `tailwind.config.js` | Tailwind の設定 | ここを直す |
+| `app.html` / `css.html` / `vendor.html` | 生成物 | **手で編集しない** |
+
+> ⚠️ **`src/app.jsx` を直したら、必ず `npm run build` を走らせてから push してください。**
+> 生成物を更新し忘れると、変更が画面に出ません。
+
+表示・アクセシビリティの実測結果は [AUDIT.md](./AUDIT.md) にあります。
