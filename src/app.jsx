@@ -7,10 +7,11 @@
           setTimeout(() => {
             switch(funcName) {
               case 'getSettingsData': return resolve({ theme: '春の訪れ', votingStatus: '投票受付中' });
+              // 投票中は author を返さない（サーバーと同じ形にしておく）
               case 'getPlazaData': return resolve({
                   haikus: [
-                    { id: 1, author: 'GIGA太郎', line1: 'さくらちる', line2: 'ランドセルには', line3: 'ゆめいっぱい', score: 3 },
-                    { id: 2, author: '花子', line1: 'あたたかい', line2: 'はるのかぜふく', line3: 'こうていで', score: 0 }
+                    { id: 1, author: '', isMine: false, line1: 'さくらちる', line2: 'ランドセルには', line3: 'ゆめいっぱい', score: 3 },
+                    { id: 2, author: '', isMine: false, line1: 'あたたかい', line2: 'はるのかぜふく', line3: 'こうていで', score: 0 }
                   ],
                   comments: [{haikuId:1, commenter:'先生', comment:'情景が浮かぶね！'}], myVotes: [], settings: { votingStatus: '投票受付中' }
                 });
@@ -22,7 +23,7 @@
               case 'getMyHaikus': return resolve([]);
               case 'getArchiveList': return resolve([]);
               case 'getArchiveData': return resolve([]);
-              case 'checkAdminPassword': return resolve(args[0] === '1234');
+              case 'checkAdminPassword': return resolve(args[0] === '1234' ? { success: true, token: 'mock-token' } : { success: false });
               default: return resolve({ success: true, name: args[0] || '名無し', message: '成功' });
             }
           }, 500);
@@ -335,8 +336,10 @@
         else setIsRefreshing(true);
         
         try {
-          const res = await runGas('getPlazaData', voterId);
-          setData(res); 
+          // 名前は「自分の句かどうか」をサーバーに判断してもらうためだけに送る。
+          // ほかの子の名前は、締め切るまで返ってこない。
+          const res = await runGas('getPlazaData', voterId, authorName);
+          setData(res);
         } catch(e) {
           showToast('データの取得に失敗しました', 'error');
         }
@@ -492,7 +495,9 @@
       const [isSubmitting, setIsSubmitting] = useState(false);
       const dialogRef = useDialog(onClose);
 
-      const isMyHaiku = haiku.author === authorName;
+      // もとは haiku.author と突き合わせていたが、投票中は作者名を送らなくしたので
+      // サーバーが返す真偽値を見る。
+      const isMyHaiku = !!haiku.isMine;
       const isVotingClosed = data.settings.votingStatus === '投票締切';
       const myVotes = data.myVotes || [];
       const comments = data.comments.filter(c => c.haikuId === haiku.id);
@@ -694,56 +699,70 @@
       const [dashData, setDashData] = useState(null);
       const [newPass, setNewPass] = useState('');
       const [isProcessing, setIsProcessing] = useState(false);
+      // サーバーから受け取る合鍵。管理者向けの処理はこれを添えないと通らない。
+      // 画面を離れると消える（もともとログイン状態も残らない作りだった）。
+      const [token, setToken] = useState('');
 
-      const loadDashboard = async () => {
-        const data = await runGas('getAdminDashboardData');
+      const loadDashboard = async (tk) => {
+        const data = await runGas('getAdminDashboardData', tk || token);
         if(data) setDashData(data);
+      };
+
+      // 合鍵が切れた／不正なときはサーバーが例外を投げる。その文言をそのまま出す。
+      const run = async (fn) => {
+        setIsProcessing(true);
+        try { await fn(); }
+        catch (err) { showToast((err && err.message) || '通信エラーが発生しました', 'error'); }
+        setIsProcessing(false);
       };
 
       const handleLogin = async (e) => {
         e.preventDefault();
-        setIsProcessing(true);
-        const valid = await runGas('checkAdminPassword', password);
-        if (valid) {
-          setIsLoggedIn(true);
-          await loadDashboard();
-        } else showToast('パスワードが違います', 'error');
-        setIsProcessing(false);
+        await run(async () => {
+          const res = await runGas('checkAdminPassword', password);
+          if (res && res.success) {
+            setToken(res.token);
+            setIsLoggedIn(true);
+            await loadDashboard(res.token);
+          } else showToast('パスワードが違います', 'error');
+        });
       };
 
       const handleUpdateSettings = async (field, value) => {
-        setIsProcessing(true);
-        const res = await runGas('updateSettings', field === 'theme' ? value : dashData.settings.theme, field === 'votingStatus' ? value : dashData.settings.votingStatus);
-        if (res && res.success) { showToast('設定を更新しました'); await loadDashboard(); } 
-        else showToast('失敗しました', 'error');
-        setIsProcessing(false);
+        await run(async () => {
+          const res = await runGas('updateSettings', token,
+            field === 'theme' ? value : dashData.settings.theme,
+            field === 'votingStatus' ? value : dashData.settings.votingStatus);
+          if (res && res.success) { showToast('設定を更新しました'); await loadDashboard(); }
+          else showToast(res?.message || '失敗しました', 'error');
+        });
       };
 
       const handleToggleMute = async (haikuId, currentMute) => {
         if (!confirm(currentMute ? 'ミュートを解除し、広場に再表示しますか？' : 'この作品を広場から隠しますか？（削除はされません）')) return;
-        setIsProcessing(true);
-        const res = await runGas('toggleMuteHaiku', haikuId, !currentMute);
-        if (res && res.success) { showToast('表示状態を変更しました'); await loadDashboard(); }
-        else showToast('失敗しました', 'error');
-        setIsProcessing(false);
+        await run(async () => {
+          const res = await runGas('toggleMuteHaiku', token, haikuId, !currentMute);
+          if (res && res.success) { showToast('表示状態を変更しました'); await loadDashboard(); }
+          else showToast(res?.message || '失敗しました', 'error');
+        });
       };
 
       const handleReset = async () => {
         if (!confirm('本当に新しい句会を準備しますか？\n（現在のデータは過去の記録として保存されます）')) return;
-        setIsProcessing(true);
-        const res = await runGas('resetKukai');
-        if (res && res.success) { showToast(res.message); await loadDashboard(); } 
-        else showToast('失敗しました', 'error');
-        setIsProcessing(false);
+        await run(async () => {
+          const res = await runGas('resetKukai', token);
+          if (res && res.success) { showToast(res.message); await loadDashboard(); }
+          else showToast(res?.message || '失敗しました', 'error');
+        });
       };
 
       const handleChangePass = async (e) => {
         e.preventDefault();
-        setIsProcessing(true);
-        const res = await runGas('changeAdminPassword', password, newPass);
-        if(res && res.success){ showToast(res.message); setPassword(newPass); setNewPass(''); } 
-        else showToast('失敗しました', 'error');
-        setIsProcessing(false);
+        await run(async () => {
+          const res = await runGas('changeAdminPassword', password, newPass);
+          if(res && res.success){ showToast(res.message); setPassword(newPass); setNewPass(''); }
+          else showToast(res?.message || '失敗しました', 'error');
+        });
       };
 
       if (!isLoggedIn) return (

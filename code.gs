@@ -76,12 +76,26 @@ function getSettingsData() {
   };
 }
 
-function getPlazaData(voterId) {
+/**
+ * 広場のデータ。
+ *
+ * ⚠️ もとは作者の名前（B列）を、投票中かどうかに関係なく全員に返していた。
+ *    画面では伏せていたが、開発者ツールを開けば誰の句か分かってしまう。
+ *    「画面に出さない」は隠したことにならないので、締め切るまで送らない。
+ *
+ * @param voterId 投票者の識別子（端末ごと）
+ * @param myName  自分の名前。自分の句に投票欄を出さないためだけに使う。
+ *                自己申告なので、これで守られるのは事故だけ（なりすましは防げない）。
+ */
+function getPlazaData(voterId, myName) {
   const ss = getDbSpreadsheet();
   const haikuData = ss.getSheetByName('俳句').getDataRange().getValues().slice(1);
   const commentData = ss.getSheetByName('コメント').getDataRange().getValues().slice(1);
   const voteData = ss.getSheetByName('投票').getDataRange().getValues().slice(1);
   const settings = getSettingsData();
+
+  // 締め切ったあとだけ作者を明かす（I列＝公開名は updateSettings が埋める）
+  const revealed = settings.votingStatus === '投票締切';
 
   const haikus = [];
   haikuData.forEach(row => {
@@ -90,8 +104,10 @@ function getPlazaData(voterId) {
     if (!isMuted) {
       haikus.push({
         id: row[0],
-        author: row[1],
-        date: row[2] ? String(row[2]) : '', 
+        author: revealed ? row[1] : '',
+        // 自分の句かどうかだけを真偽値で返す。名前そのものは送らない。
+        isMine: !!myName && String(row[1]) === String(myName),
+        date: row[2] ? String(row[2]) : '',
         haiku: row[3],
         line1: row[4],
         line2: row[5],
@@ -198,14 +214,57 @@ function submitComment(haikuId, comment, commenterName) {
 }
 
 // -------------------------------------------------------------------------
-// 5. 管理者API (神アプリアップデート版)
+// 5. 管理者API
 // -------------------------------------------------------------------------
-function checkAdminPassword(password) {
-  const props = PropertiesService.getScriptProperties();
-  return password === props.getProperty('ADMIN_PASSWORD');
+/**
+ * ここから下は先生だけが使う処理。
+ *
+ * ⚠️ google.script.run で呼べる関数は、**画面に出ていなくても誰でも呼べる。**
+ *    引数も自由に作れる。以前は下の4つに合言葉の確認がまったく無く、
+ *    管理画面のボタンを隠しているだけだった。児童が開発者ツールから
+ *
+ *      google.script.run.resetKukai()          … 句会を勝手に終わらせる
+ *      google.script.run.updateSettings(...)   … 投票を勝手に締め切る
+ *                                                （締め切ると全員の名前が出る）
+ *      google.script.run.toggleMuteHaiku(...)  … 他人の句を広場から消す
+ *      google.script.run.getAdminDashboardData() … 投票中でも全員の名前を取る
+ *
+ *    と打てば通ってしまう。ボタンを隠すのは対策にならない。
+ *
+ * 合言葉が合ったときに使い捨ての合鍵（トークン）を渡し、
+ * 以降の操作はその合鍵をサーバー側で照合する形にした。
+ * 合鍵は CacheService に置く（上限の6時間。授業1コマには十分で、
+ * 放っておけば自然に切れる）。
+ */
+var ADMIN_TOKEN_PREFIX_ = 'admin_token_';
+var ADMIN_TOKEN_SECONDS_ = 6 * 60 * 60;   // CacheService の上限
+
+function issueAdminToken_() {
+  var token = Utilities.getUuid();
+  CacheService.getScriptCache().put(ADMIN_TOKEN_PREFIX_ + token, '1', ADMIN_TOKEN_SECONDS_);
+  return token;
 }
 
-function updateSettings(theme, status) {
+function requireAdmin_(token) {
+  if (!token || CacheService.getScriptCache().get(ADMIN_TOKEN_PREFIX_ + token) !== '1') {
+    throw new Error('先生として確認できませんでした。もう一度ログインしてください。');
+  }
+}
+
+function checkAdminPassword(password) {
+  const props = PropertiesService.getScriptProperties();
+  if (password === props.getProperty('ADMIN_PASSWORD')) {
+    return { success: true, token: issueAdminToken_() };
+  }
+  // 合言葉は初期値が 1234 の4桁で、画面から何度でも試せる。
+  // 締め出すと児童のいたずらで先生が入れなくなるので、代わりに1回ごとに待たせて
+  // 総当たりを割に合わなくする。本当の対策は合言葉を変えてもらうこと。
+  Utilities.sleep(1000);
+  return { success: false };
+}
+
+function updateSettings(token, theme, status) {
+  requireAdmin_(token);
   try {
     const ss = getDbSpreadsheet();
     const settingsSheet = ss.getSheetByName('設定');
@@ -227,15 +286,21 @@ function updateSettings(theme, status) {
 }
 
 function changeAdminPassword(oldPass, newPass) {
-  if (checkAdminPassword(oldPass)) {
-    PropertiesService.getScriptProperties().setProperty('ADMIN_PASSWORD', newPass);
-    return { success: true, message: 'パスワードを更新しました。' };
+  const props = PropertiesService.getScriptProperties();
+  if (oldPass !== props.getProperty('ADMIN_PASSWORD')) {
+    Utilities.sleep(1000);
+    return { success: false, message: '現在のパスワードが違います。' };
   }
-  return { success: false, message: '現在のパスワードが違います。' };
+  if (!newPass || String(newPass).length < 4) {
+    return { success: false, message: 'あたらしいパスワードは4文字以上にしてください。' };
+  }
+  props.setProperty('ADMIN_PASSWORD', newPass);
+  return { success: true, message: 'パスワードを更新しました。' };
 }
 
-// 新規追加：ダッシュボード用データの一括取得
-function getAdminDashboardData() {
+// ダッシュボード用データの一括取得。作者の本名を含むので先生だけに返す。
+function getAdminDashboardData(token) {
+  requireAdmin_(token);
   const ss = getDbSpreadsheet();
   const haikuSheet = ss.getSheetByName('俳句');
   const commentSheet = ss.getSheetByName('コメント');
@@ -258,8 +323,9 @@ function getAdminDashboardData() {
   };
 }
 
-// 新規追加：不適切コンテンツのワンタップミュート
-function toggleMuteHaiku(haikuId, muteStatus) {
+// 不適切コンテンツのワンタップミュート
+function toggleMuteHaiku(token, haikuId, muteStatus) {
+  requireAdmin_(token);
   try {
     const ss = getDbSpreadsheet();
     const sheet = ss.getSheetByName('俳句');
@@ -274,7 +340,8 @@ function toggleMuteHaiku(haikuId, muteStatus) {
   } catch(e) { return { success: false, message: e.message }; }
 }
 
-function resetKukai() {
+function resetKukai(token) {
+  requireAdmin_(token);
   try {
     const ss = getDbSpreadsheet();
     const timestamp = Utilities.formatDate(new Date(), ss.getSpreadsheetTimeZone(), 'yyyy-MM-dd_HH-mm');
