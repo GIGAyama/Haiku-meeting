@@ -139,9 +139,18 @@ GAS は拡張子を自動で付けるので、**名前は拡張子なしで入�
 ## 👩‍💻 開発者向け
 
 ```bash
-npm ci
+npm install
 npm run build   # app.html / css.html / vendor.html を作り直す
 ```
+
+> ⚠️ **このリポジトリには `package-lock.json` がありません。**
+> そのため `npm ci` は使えません（`npm install` を使ってください）。
+> また、`package.json` の指定が `^` のキャレット付きのため、**いま `npm install` すると
+> 同梱されているものより新しい版が入り、生成物が変わります。**
+> 実測した例：`canvas-confetti` が 1.6.0 → 1.9.4 に上がり、
+> `vendor.html` が 157KB → 164KB、`app.html` が 52KB → 54KB になりました。
+> **意図せず版を上げたくない場合は、生成物を作り直したあとに
+> `git diff` で差分を確かめてください。**
 
 | ファイル | 中身 | 編集してよいか |
 |---|---|---|

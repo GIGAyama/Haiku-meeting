@@ -172,9 +172,13 @@ GAS は画面を iframe で包むため、片方だけでは安全領域が使�
 ## 7. 作り直す手順
 
 ```bash
-npm ci
+npm install
 npm run build   # app.html / css.html / vendor.html を作り直す
 ```
 
 **`src/app.jsx` を直したら、必ず `npm run build` を走らせてから push すること。**
 生成物を更新し忘れると、変更が画面に出ない。
+
+> `package-lock.json` が無いため `npm ci` は使えない。
+> また `npm install` は `^` の範囲で新しい版を取るので、生成物のサイズが
+> ここに載せた実測値と変わることがある。作り直したら `git diff` で確かめること。
