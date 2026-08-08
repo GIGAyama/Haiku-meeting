@@ -1,0 +1,26 @@
+{
+  "_説明": "scripts/check-project.mjs が読む設定。しきい値と、見に行くファイルをここに置く。",
+
+  "配信ファイル": ["index.html", "app.html", "css.html", "vendor.html"],
+  "原本": ["src/app.jsx", "tools/extra.css", "tailwind.config.js", "code.gs", "index.html"],
+  "生成物": ["app.html", "css.html", "vendor.html"],
+
+  "1ファイルの上限KB": 400,
+  "1ファイルの上限行数": 5000,
+  "初回JSの上限KB": 300,
+
+  "_管理者API": "サーバー側で requireAdmin_ を通さなければならない関数。ここに足すと検査対象になる。",
+  "管理者API": ["updateSettings", "toggleMuteHaiku", "resetKukai", "getAdminDashboardData"],
+
+  "_CDN": "実行コードを外から取ってはいけない。学校のフィルタリングで塞がれると画面が出ない。",
+  "禁止するCDN": [
+    "cdn.tailwindcss.com",
+    "unpkg.com",
+    "cdn.jsdelivr.net",
+    "cdnjs.cloudflare.com",
+    "babel/standalone"
+  ],
+
+  "_見た目だけの外部参照": "止まっても字の形が変わるだけなので許す（§2-7）。",
+  "許す外部参照": ["fonts.googleapis.com", "fonts.gstatic.com"]
+}

@@ -1,0 +1,45 @@
+name: CI
+
+# pull_request でも動かす。push だけだと、取り込む前に落ちていることに気づけない。
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: 依存を入れる（版は package-lock.json で固定）
+        run: npm ci
+
+      - name: 生成物を作り直す
+        run: npm run build
+
+      # このリポジトリでいちばん起きやすい事故。
+      # src/app.jsx を直したのに npm run build を忘れると、変更が画面に出ない。
+      # 生成物は配信されるファイルそのものなので、ここで差分が出たら止める。
+      - name: 生成物が原本と一致しているか（build の忘れを止める）
+        run: |
+          if ! git diff --exit-code --stat app.html css.html vendor.html; then
+            echo "::error::src/app.jsx や tools/extra.css を直したあと npm run build を走らせていません。"
+            echo "手元で npm run build を実行し、app.html / css.html / vendor.html も一緒にコミットしてください。"
+            exit 1
+          fi
+
+      - name: 品質ゲート
+        run: node scripts/check-project.mjs
+
+      # 「0件でした」だけでは、検査が動いているのか何も見ていないのか区別できない。
+      - name: 品質ゲート自体を、わざと壊して確かめる
+        run: node scripts/check-project.mjs --self-test
+
+      - name: 管理者APIの認可（合鍵なしで弾かれるか）
+        run: node tests/gas-admin-auth.test.mjs

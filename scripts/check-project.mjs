@@ -1,0 +1,238 @@
+/**
+ * 品質ゲート（GIGA Standard v5 / Part I の静的検査）
+ *
+ *   node scripts/check-project.mjs              … 検査する
+ *   node scripts/check-project.mjs --self-test  … 検査そのものを、わざと壊して確かめる
+ *
+ * ■ なぜ --self-test があるか
+ *
+ *   「0件でした」だけでは、検査が動いているのか、何も見ていないのかを区別できない。
+ *   実際、この仕組みを作る過程で判定器の不具合が2件見つかっている
+ *   （半透明の面で色が壊れる／グラデーションの上を全部誤検出する）。
+ *   規則ごとに「これを入れたら必ず落ちるはず」という壊し方を持たせ、
+ *   本当に落ちることを毎回確かめる。
+ *
+ * ■ コメントを落としてから判定する
+ *
+ *   このリポジトリの index.html には、CDN をやめた経緯が日本語のコメントで
+ *   書いてある。素朴に grep すると **その説明文に反応して**「CDN を使っている」と
+ *   誤検知する。実際そうなった。判定の前にコメントを落とす。
+ *
+ * 正本（Digital_textbook の scripts/lib/project-quality.mjs）は作業環境から
+ * 取得できなかったため、ここでは自前で書いている。正本が使えるようになったら
+ * 差し替えられるよう、規則は RULES 配列に閉じてある。
+ */
+import { readFileSync, existsSync, statSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+const CONFIG = JSON.parse(readFileSync(join(ROOT, 'quality.config.json'), 'utf8'));
+
+/** HTML コメント・JS のブロック/行コメント・CSS コメントを落とす */
+export const stripComments = (s) => s
+  .replace(/<!--[\s\S]*?-->/g, '')
+  .replace(/\/\*[\s\S]*?\*\//g, '')
+  .replace(/^[ \t]*\/\/.*$/gm, '');
+
+/** ファイルを読み込んで { 生, コメント無し } の地図にする */
+const loadFiles = () => {
+  const files = new Map();
+  for (const p of new Set([...CONFIG['配信ファイル'], ...CONFIG['原本'], 'tools/extra.css'])) {
+    const full = join(ROOT, p);
+    if (!existsSync(full)) continue;
+    const raw = readFileSync(full, 'utf8');
+    files.set(p, { raw, clean: stripComments(raw), kb: Buffer.byteLength(raw) / 1024, lines: raw.split('\n').length });
+  }
+  return files;
+};
+
+const get = (files, p) => files.get(p)?.clean ?? '';
+
+/**
+ * 規則。
+ *   check(files) … { ok, detail } を返す
+ *   break(files) … わざと壊す（--self-test 用）。壊したあと check が落ちなければ検査が甘い。
+ */
+const RULES = [
+  {
+    id: 'CDN実行コードなし',
+    why: '学校のフィルタリングで塞がれると画面が一切出ない',
+    check: (files) => {
+      const hits = [];
+      for (const p of CONFIG['配信ファイル']) {
+        for (const bad of CONFIG['禁止するCDN']) {
+          if (get(files, p).includes(bad)) hits.push(`${p}: ${bad}`);
+        }
+      }
+      return { ok: hits.length === 0, detail: hits.length ? hits.join(' / ') : '0 バイト' };
+    },
+    break: (files) => {
+      const f = files.get('index.html');
+      f.clean += '\n<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>';
+    },
+  },
+  {
+    id: '拡大を禁止していない',
+    why: '見えづらい子が画面を大きくできなくなる',
+    check: (files) => {
+      const hits = ['index.html', 'code.gs'].filter(p => /user-scalable\s*=\s*no|maximum-scale/.test(get(files, p)));
+      return { ok: hits.length === 0, detail: hits.length ? hits.join(', ') + ' に指定あり' : '指定なし' };
+    },
+    break: (files) => { files.get('code.gs').clean += "\n.addMetaTag('viewport','width=device-width, user-scalable=no')"; },
+  },
+  {
+    id: 'viewport-fit=cover が index.html と code.gs の両方にある',
+    why: 'GAS は画面を iframe で包むため、片方だけでは安全領域が使えない',
+    check: (files) => {
+      const missing = ['index.html', 'code.gs'].filter(p => !get(files, p).includes('viewport-fit=cover'));
+      return { ok: missing.length === 0, detail: missing.length ? `${missing.join(', ')} に無い` : '両方にあり' };
+    },
+    break: (files) => { files.get('code.gs').clean = get(files, 'code.gs').replace(/viewport-fit=cover/g, ''); },
+  },
+  {
+    id: '100vh を単独で使っていない',
+    why: 'モバイルのアドレスバー分だけはみ出し、下のボタンが押せなくなる',
+    // ⚠️ @supports not (height: 100dvh) の中の 100vh は正しいフォールバック。
+    //    ここを見ないと、正しく書いてあるものを落としてしまう（v5 §P4 の既知の誤検知）。
+    check: (files) => {
+      const css = get(files, 'tools/extra.css');
+      if (!css.includes('100dvh')) return { ok: false, detail: '100dvh が無い' };
+      const outside = css.replace(/@supports\s+not\s*\(height:\s*100dvh\)\s*\{[\s\S]*?\}\s*\}/g, '');
+      const bare = /100vh/.test(outside);
+      return { ok: !bare, detail: bare ? '@supports の外に 100vh がある' : '100dvh ＋ @supports のフォールバック' };
+    },
+    break: (files) => { files.get('tools/extra.css').clean += '\n.something { height: 100vh; }'; },
+  },
+  {
+    id: 'safe-area-inset を使っている',
+    why: 'ノッチやホームバーに中身が潜り込む',
+    check: (files) => {
+      const n = (get(files, 'tools/extra.css').match(/safe-area-inset/g) || []).length;
+      return { ok: n > 0, detail: `${n} か所` };
+    },
+    break: (files) => { files.get('tools/extra.css').clean = get(files, 'tools/extra.css').replace(/safe-area-inset/g, 'xxx'); },
+  },
+  {
+    id: 'prefers-reduced-motion が 0 ではない',
+    why: '0 にすると animation-fill-mode: forwards が壊れ、fade-in の中身が消える',
+    check: (files) => {
+      const css = get(files, 'tools/extra.css');
+      if (!css.includes('prefers-reduced-motion')) return { ok: false, detail: '対応していない' };
+      const block = css.slice(css.indexOf('prefers-reduced-motion'));
+      const end = block.indexOf('}\n}');
+      const body = block.slice(0, end > 0 ? end : 400);
+      const zero = /animation-duration:\s*0s|animation-duration:\s*0\s*!|transition-duration:\s*0s|transition-duration:\s*0\s*!/.test(body);
+      return { ok: !zero, detail: zero ? '0 になっている（.01ms にする）' : '.01ms を使っている' };
+    },
+    break: (files) => {
+      files.get('tools/extra.css').clean = get(files, 'tools/extra.css').replace(/animation-duration:\s*0\.01ms/, 'animation-duration: 0s');
+    },
+  },
+  {
+    id: 'forced-colors に対応している',
+    why: 'ハイコントラストモードで色の境目が消え、押せると分からなくなる',
+    check: (files) => ({ ok: get(files, 'tools/extra.css').includes('forced-colors'), detail: '' }),
+    break: (files) => { files.get('tools/extra.css').clean = get(files, 'tools/extra.css').replace(/forced-colors/g, 'xxx'); },
+  },
+  {
+    id: 'rt（ふりがな）の色を決め打ちしていない',
+    why: '色のついた面に重ねると読めなくなる。ふりがなが要るのは低学年の児童である',
+    // 継がせる規則が広すぎても壊れる。アプリ全体の地の色（.app-shell）を
+    // 「色のついた面」と数えると、rt の既定色が一度も効かなくなる（実測でそうなっていた）。
+    check: (files) => {
+      const css = get(files, 'tools/extra.css');
+      const hasInherit = /rt\s*\{\s*color:\s*inherit/.test(css) || /rt\s*\{[^}]*color:\s*inherit/.test(css);
+      const excludesShell = css.includes(':not(.app-shell) rt');
+      if (!hasInherit) return { ok: false, detail: '色のついた面で継がせる規則が無い' };
+      if (!excludesShell) return { ok: false, detail: 'アプリ全体の地の色を除いていない（既定色が効かなくなる）' };
+      return { ok: true, detail: '継がせる範囲を地の色の外に限っている' };
+    },
+    break: (files) => {
+      files.get('tools/extra.css').clean = get(files, 'tools/extra.css').replace(/:not\(\.app-shell\) rt/g, ' rt');
+    },
+  },
+  {
+    id: '管理者APIがサーバー側で認可を通している',
+    why: 'google.script.run は誰でも呼べる。ボタンを隠すのは防御ではない',
+    check: (files) => {
+      const gs = get(files, 'code.gs');
+      const bad = CONFIG['管理者API'].filter(fn => {
+        const m = new RegExp(`function\\s+${fn}\\s*\\([^)]*\\)\\s*\\{([\\s\\S]*?)\\n\\}`, 'm').exec(gs);
+        return !m || !m[1].includes('requireAdmin_');
+      });
+      return { ok: bad.length === 0, detail: bad.length ? `認可なし: ${bad.join(', ')}` : `${CONFIG['管理者API'].length} 件すべて通している` };
+    },
+    break: (files) => {
+      files.get('code.gs').clean = get(files, 'code.gs').replace(/function resetKukai\(token\) \{\n  requireAdmin_\(token\);/, 'function resetKukai(token) {');
+    },
+  },
+  {
+    id: 'localStorage.clear() を使っていない',
+    why: '同じ端末のほかのアプリの記録まで消える',
+    check: (files) => {
+      const hits = [...files.entries()].filter(([, v]) => v.clean.includes('localStorage.clear()')).map(([k]) => k);
+      return { ok: hits.length === 0, detail: hits.join(', ') || '未使用' };
+    },
+    break: (files) => { files.get('src/app.jsx').clean += '\nlocalStorage.clear();'; },
+  },
+  {
+    id: 'タップ領域を広げる仕組みがある',
+    why: '詰めて組んだところで min-height を当てると折り返しが起き、別の破綻を生む',
+    check: (files) => {
+      const css = get(files, 'tools/extra.css');
+      const ok = /\.tap-44::after/.test(css) && /min-width:\s*44px/.test(css) && /min-height:\s*44px/.test(css);
+      return { ok, detail: ok ? '.tap-44 が疑似要素で当たり判定を広げている' : '.tap-44 が無い' };
+    },
+    break: (files) => { files.get('tools/extra.css').clean = get(files, 'tools/extra.css').replace(/min-height:\s*44px/g, 'min-height: 20px'); },
+  },
+  {
+    id: 'ファイルの大きさが上限内',
+    why: '校内Wi-Fiで40人が同時に開く',
+    check: (files) => {
+      const over = [...files.entries()]
+        .filter(([, v]) => v.kb > CONFIG['1ファイルの上限KB'] || v.lines > CONFIG['1ファイルの上限行数'])
+        .map(([k, v]) => `${k} ${v.kb.toFixed(0)}KB/${v.lines}行`);
+      const js = ['app.html', 'vendor.html'].reduce((a, p) => a + (files.get(p)?.kb ?? 0), 0);
+      if (js > CONFIG['初回JSの上限KB']) over.push(`初回JS ${js.toFixed(0)}KB`);
+      return { ok: over.length === 0, detail: over.join(', ') || `初回JS ${js.toFixed(0)}KB（上限 ${CONFIG['初回JSの上限KB']}KB）` };
+    },
+    break: (files) => { files.get('app.html').kb = 9999; },
+  },
+];
+
+/* ------------------------------------------------------------------ 実行 */
+const selfTest = process.argv.includes('--self-test');
+
+if (!selfTest) {
+  const files = loadFiles();
+  let ng = 0;
+  console.log('GIGA Standard v5 品質ゲート\n');
+  for (const rule of RULES) {
+    const r = rule.check(files);
+    if (!r.ok) ng++;
+    console.log(`  ${r.ok ? '✅' : '❌'} ${rule.id}${r.detail ? `  … ${r.detail}` : ''}`);
+    if (!r.ok) console.log(`     なぜ大事か: ${rule.why}`);
+  }
+  console.log(`\n${RULES.length} 件中 ${RULES.length - ng} 件が通った。`);
+  if (ng) { console.error(`\n❌ ${ng} 件が基準を満たしていない。`); process.exit(1); }
+  console.log('\n⚠️ これは静的な検査だけ。コントラスト・タップ領域・キーボード操作は');
+  console.log('   実ブラウザで測らないと分からない（AUDIT.md の「測り方」を参照）。');
+} else {
+  // 規則ごとに、壊す前は通り、壊したあとは落ちることを確かめる
+  console.log('品質ゲートの自己検証（わざと壊して、落ちることを見る）\n');
+  let ng = 0;
+  for (const rule of RULES) {
+    const before = rule.check(loadFiles());
+    const files = loadFiles();
+    rule.break(files);
+    const after = rule.check(files);
+    const ok = before.ok && !after.ok;
+    if (!ok) ng++;
+    console.log(`  ${ok ? '✅' : '❌'} ${rule.id}`);
+    if (!before.ok) console.log(`     壊す前から落ちている（${before.detail}）`);
+    if (after.ok) console.log(`     わざと壊しても通ってしまった ← この規則は何も見ていない`);
+  }
+  console.log(`\n${RULES.length} 件中 ${RULES.length - ng} 件が「壊すと落ちる」ことを確かめられた。`);
+  if (ng) { console.error(`\n❌ ${ng} 件の規則が信用できない。`); process.exit(1); }
+}
