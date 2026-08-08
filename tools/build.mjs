@@ -84,6 +84,10 @@ const { code } = transformSync(jsx, {
     presets: [[require.resolve('@babel/preset-react'), { runtime: 'classic' }]],
     compact: false,
     comments: true,
+    // 日本語をそのまま出す。既定だと版によって "句" が "句" になり、
+    // 中身が同じなのに差分が出るうえ、生成物が 1.7KB 太る。
+    // 出力は UTF-8 の <script> に入れるので、エスケープする理由がない。
+    generatorOpts: { jsescOption: { minimal: true } },
 });
 const app = `<!-- 自動生成。中身は src/app.jsx。tools/build.mjs が作る。手で編集しない。 -->\n<script>\n${code}\n</script>\n`;
 writeFileSync(join(ROOT, 'app.html'), app);
