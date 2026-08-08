@@ -22,9 +22,18 @@ ruby { ruby-align: center; ruby-position: over; vertical-align: baseline; line-h
 /* ふりがな。色を決め打ちにすると、色のついた面に重ねたとき読めなくなる。
    下地が色つきのところでは、下の文字と同じ色を継がせる。 */
 rt { font-size: 0.55em; color: #5b6472; font-family: sans-serif; line-height: 1; user-select: none; }
+
+/* ⚠️ アプリの一番外側にも地の色（bg-[#fdfaf6]）が付いている。
+   そのため [class*="bg-"] だけで書くと、**画面上のすべての rt** が
+   これに当たってしまい、上の既定値が一度も効かなくなる。実測でそうなっていた。
+
+     けっかはっぴょう … 見出しの #d9534f を継いで 比 3.81（基準 4.5 に届かない）
+
+   地の色は「色のついた面」ではないので .app-shell を除く。
+   ふりがなが要るのは低学年の児童なので、ここを外すといちばん困る人が困る。 */
 button rt,
-[class*="bg-"] rt,
-[class*="text-white"] rt { color: inherit; }
+[class*="text-white"] rt,
+[class*="bg-"]:not(.app-shell) rt { color: inherit; }
 
 ::-webkit-scrollbar { width: 8px; }
 ::-webkit-scrollbar-track { background: transparent; }

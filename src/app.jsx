@@ -1,4 +1,4 @@
-    const { useState, useEffect, useCallback, useMemo } = React;
+    const { useState, useEffect, useCallback, useMemo, useRef } = React;
 
     const runGas = (funcName, ...args) => {
       return new Promise((resolve, reject) => {
@@ -32,18 +32,57 @@
       });
     };
 
-    const RubyText = ({ text, kana }) => <ruby>{text}<rt>{kana}</rt></ruby>;
+    // <rp> は、ふりがなに対応していない読み上げソフトが
+    //「はいく（はいく）」と二重に読まないための括弧。画面には出ない。
+    const RubyText = ({ text, kana }) => <ruby>{text}<rp>（</rp><rt>{kana}</rt><rp>）</rp></ruby>;
     const Skeleton = ({ className }) => <div className={`animate-pulse bg-slate-200/60 rounded-xl ${className}`}></div>;
 
+    /**
+     * モーダルを、キーボードだけでも使えるようにする。
+     *  - Esc で閉じる（実測で、閉じないままだった）
+     *  - 開いたら中に focus を移し、Tab が外へ出ていかないようにする
+     *  - 閉じたら、開く前に触っていたところへ focus を戻す
+     */
+    const useDialog = (onClose) => {
+      const ref = useRef(null);
+      useEffect(() => {
+        const node = ref.current;
+        if (!node) return;
+        const opener = document.activeElement;
+        const items = () => Array.from(node.querySelectorAll(
+          'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        )).filter(el => el.offsetParent !== null);
+
+        const first = items()[0];
+        if (first) first.focus();
+
+        const onKey = (e) => {
+          if (e.key === 'Escape') { onClose(); return; }
+          if (e.key !== 'Tab') return;
+          const list = items();
+          if (!list.length) return;
+          const i = list.indexOf(document.activeElement);
+          if (e.shiftKey && i <= 0) { e.preventDefault(); list[list.length - 1].focus(); }
+          else if (!e.shiftKey && i === list.length - 1) { e.preventDefault(); list[0].focus(); }
+        };
+        document.addEventListener('keydown', onKey);
+        return () => {
+          document.removeEventListener('keydown', onKey);
+          if (opener && opener.focus) opener.focus();
+        };
+      }, [onClose]);
+      return ref;
+    };
+
     const Icons = {
-      Home: () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" /></svg>,
-      Grid: () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg>,
-      User: () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>,
-      Archive: () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" /></svg>,
-      Settings: () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>,
-      Check: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>,
-      Close: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>,
-      Refresh: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+      Home: () => <svg aria-hidden="true" focusable="false" className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" /></svg>,
+      Grid: () => <svg aria-hidden="true" focusable="false" className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg>,
+      User: () => <svg aria-hidden="true" focusable="false" className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>,
+      Archive: () => <svg aria-hidden="true" focusable="false" className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" /></svg>,
+      Settings: () => <svg aria-hidden="true" focusable="false" className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>,
+      Check: () => <svg aria-hidden="true" focusable="false" className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>,
+      Close: () => <svg aria-hidden="true" focusable="false" className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>,
+      Refresh: () => <svg aria-hidden="true" focusable="false" className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
     };
 
     const triggerConfetti = () => {
@@ -101,13 +140,19 @@
       };
 
       return (
-        <div className="h-screen w-full flex flex-col bg-[#fdfaf6] text-slate-800 font-serif selection:bg-blue-200">
-          <header className="flex-none bg-white/80 backdrop-blur-md shadow-sm z-40 border-b border-slate-200">
+        // app-shell は「アプリ全体の地の色」。これを色のついた面と数えると
+        // ふりがなの既定色が効かなくなるので、CSS 側で除いている（extra.css の rt）。
+        <div className="app-shell h-screen w-full flex flex-col bg-[#fdfaf6] text-slate-800 font-serif selection:bg-blue-200">
+          <header className="no-print flex-none bg-white/80 backdrop-blur-md shadow-sm z-40 border-b border-slate-200">
             <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
-              <div className="flex items-center gap-2 cursor-pointer" onClick={() => setCurrentView('home')}>
-                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#3c4a6d] to-[#2a3550] flex items-center justify-center text-white shadow-inner">
+              <div className="flex items-center gap-2">
+                {/* もとは囲みの <div> に onClick を付けていた。マウスでしか押せず、
+                    中に <h1> を抱えていたため役割も曖昧だった。丸い印だけを
+                    本物のボタンにして、見出しは見出しのまま残す。 */}
+                <button type="button" onClick={() => setCurrentView('home')} aria-label="投稿画面にもどる"
+                  className="tap-44 w-8 h-8 rounded-full bg-gradient-to-br from-[#3c4a6d] to-[#2a3550] flex items-center justify-center text-white shadow-inner">
                   <span className="text-sm font-bold">句</span>
-                </div>
+                </button>
                 <h1 className="text-xl font-bold tracking-widest text-[#3c4a6d] hidden sm:block">GIGA<RubyText text="句会" kana="くかい"/>プラザ</h1>
               </div>
               <nav className="flex items-center gap-1 sm:gap-2">
@@ -126,29 +171,38 @@
             </div>
           </main>
 
-          <footer className="flex-none w-full text-center text-slate-600 py-4 bg-white border-t border-slate-100 text-sm font-sans">
+          <footer className="no-print flex-none w-full text-center text-slate-600 py-4 bg-white border-t border-slate-100 text-sm font-sans">
             <span>© 2026 GIGA句会プラザ <a href="https://note.com/cute_borage86" target="_blank" rel="noopener noreferrer" className="tap-44 inline-block no-underline text-inherit hover:opacity-80 transition-opacity">GIGA山</a></span>
           </footer>
 
-          <div className="fixed bottom-6 right-1/2 translate-x-1/2 sm:translate-x-0 sm:right-6 z-50 flex flex-col gap-2 pointer-events-none w-full max-w-sm px-4">
+          {/* 読み上げソフトに知らせる。成功は polite（読み上げ中を遮らない）、
+              失敗は role="alert" ですぐ読ませる。目で見て気づけない子のための経路。 */}
+          <div aria-live="polite" className="no-print fixed bottom-6 right-1/2 translate-x-1/2 sm:translate-x-0 sm:right-6 z-50 flex flex-col gap-2 pointer-events-none w-full max-w-sm px-4">
             {toasts.map(toast => (
-              <div key={toast.id} className={`flex items-center gap-3 px-5 py-4 rounded-2xl shadow-xl text-white font-sans font-bold transform transition-all duration-300 ${toast.type === 'success' ? 'bg-[#8BAA7A]' : 'bg-[#d9534f]'}`}>
+              <div key={toast.id} role={toast.type === 'success' ? 'status' : 'alert'}
+                className={`flex items-center gap-3 px-5 py-4 rounded-2xl shadow-xl text-white font-sans font-bold transform transition-all duration-300 ${toast.type === 'success' ? 'bg-[#8BAA7A]' : 'bg-[#d9534f]'}`}>
                 {toast.type === 'success' ? <Icons.Check /> : <Icons.Close />}
                 <span className="flex-1 text-sm md:text-base">{toast.message}</span>
               </div>
             ))}
           </div>
 
-          {showWelcome && (
-            <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in font-sans">
-              <div className="bg-white p-8 rounded-3xl max-w-md w-full text-center shadow-2xl transform transition-transform scale-100">
-                <div className="w-16 h-16 bg-blue-100 text-blue-500 rounded-full flex items-center justify-center mx-auto mb-4"><Icons.Home /></div>
-                <h2 className="text-2xl font-bold text-slate-800 mb-2">GIGA句会プラザへようこそ！</h2>
-                <p className="mb-6 text-slate-600 leading-relaxed">ここでは、みんなの作った俳句を見たり、素敵な作品に投票したりできます。<br/>まずは自分の作品を投稿してみましょう！</p>
-                <button onClick={closeWelcome} className="bg-[#3c4a6d] hover:bg-slate-800 text-white px-8 py-4 rounded-xl font-bold w-full transition-colors shadow-lg active:scale-95">さあ、はじめよう！</button>
-              </div>
-            </div>
-          )}
+          {showWelcome && <WelcomeDialog onClose={closeWelcome} />}
+        </div>
+      );
+    };
+
+    const WelcomeDialog = ({ onClose }) => {
+      const ref = useDialog(onClose);
+      return (
+        <div className="no-print fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in font-sans">
+          <div ref={ref} role="dialog" aria-modal="true" aria-labelledby="welcome-title"
+            className="bg-white p-8 rounded-3xl max-w-md w-full text-center shadow-2xl transform transition-transform scale-100">
+            <div className="w-16 h-16 bg-blue-100 text-blue-500 rounded-full flex items-center justify-center mx-auto mb-4"><Icons.Home /></div>
+            <h2 id="welcome-title" className="text-2xl font-bold text-slate-800 mb-2">GIGA句会プラザへようこそ！</h2>
+            <p className="mb-6 text-slate-600 leading-relaxed">ここでは、みんなの作った俳句を見たり、素敵な作品に投票したりできます。<br/>まずは自分の作品を投稿してみましょう！</p>
+            <button onClick={onClose} className="bg-[#3c4a6d] hover:bg-slate-800 text-white px-8 py-4 rounded-xl font-bold w-full transition-colors shadow-lg active:scale-95">さあ、はじめよう！</button>
+          </div>
         </div>
       );
     };
@@ -187,7 +241,9 @@
       };
 
       const CharCounter = ({ text, target }) => (
-        <div className={`text-xs font-sans mt-1 text-right ${text.length > target + 2 ? 'text-red-500 font-bold' : 'text-slate-600'}`}>
+        // 目安を超えたときの赤は text-red-500 だと白地で比 3.76。
+        // これは「字が多いよ」と教える案内文なので、読めないと意味がない。
+        <div className={`text-xs font-sans mt-1 text-right ${text.length > target + 2 ? 'text-red-600 font-bold' : 'text-slate-600'}`}>
           現在 {text.length} 文字 (目安:{target})
         </div>
       );
@@ -196,7 +252,9 @@
         <div className="max-w-5xl mx-auto animate-fade-in flex flex-col md:flex-row gap-8">
           <div className="flex-1">
             <div className="bg-gradient-to-br from-[#3c4a6d] to-[#2a3550] text-white p-6 rounded-3xl shadow-lg text-center mb-6 relative overflow-hidden">
-              <h1 className="text-2xl md:text-3xl font-bold mb-3 relative z-10"><RubyText text="俳句" kana="はいく"/>を<RubyText text="投稿" kana="とうこう"/>しよう</h1>
+              {/* ヘッダーに <h1>（アプリ名）があるので、画面の見出しは h2 にそろえる。
+                  広場・自分・過去・先生はすでに h2 で、ここだけ h1 が重なっていた。 */}
+              <h2 className="text-2xl md:text-3xl font-bold mb-3 relative z-10"><RubyText text="俳句" kana="はいく"/>を<RubyText text="投稿" kana="とうこう"/>しよう</h2>
               <div className="bg-white/20 backdrop-blur-sm px-4 py-2 rounded-xl inline-block relative z-10">
                 <span className="text-xs opacity-80 mr-2"><RubyText text="今回" kana="こんかい"/>のお<RubyText text="題" kana="だい"/>:</span>
                 <span className="text-xl font-bold text-yellow-300">{settings.theme}</span>
@@ -325,7 +383,9 @@
             <h2 className="text-3xl font-bold text-center mb-8 text-[#d9534f]">🎉 <RubyText text="結果発表" kana="けっかはっぴょう" /> 🎉</h2>
             <div className="grid md:grid-cols-3 gap-6 items-end">
                <div className="order-2 md:order-1">{renderAward(top3Scores[1], '🥈 銀賞', 'text-slate-500', 'border-slate-400')}</div>
-               <div className="order-1 md:order-2">{renderAward(top3Scores[0], '🥇 金賞', 'text-yellow-600', 'border-yellow-400')}</div>
+               {/* 金賞だけ白地で比 2.94（24px の大きな字でも 3 に届かない）。
+                   銀（4.76）と銅は満たしていたので、金だけ1段濃くする。 */}
+               <div className="order-1 md:order-2">{renderAward(top3Scores[0], '🥇 金賞', 'text-yellow-700', 'border-yellow-400')}</div>
                <div className="order-3 md:order-3">{renderAward(top3Scores[2], '🥉 銅賞', 'text-amber-800', 'border-amber-700')}</div>
             </div>
           </div>
@@ -338,18 +398,24 @@
             <div>
               <h2 className="text-2xl font-bold mb-2"><RubyText text="作品広場" kana="さくひんひろば"/></h2>
               <div className="text-sm font-bold bg-white px-4 py-1.5 rounded-full shadow-sm inline-block font-sans">
-                状態: <span className={isVotingClosed ? 'text-red-500' : 'text-green-600'}>{data.settings.votingStatus}</span>
+                {/* いま句会がどの段階かを示す唯一の表示。
+                    red-500 は 3.76、green-600 は 3.30 で、どちらも基準未満だった。 */}
+                状態: <span className={isVotingClosed ? 'text-red-600' : 'text-green-700'}>{data.settings.votingStatus}</span>
               </div>
             </div>
             
-            <div className="flex items-center gap-2 w-full md:w-auto font-sans">
+            {/* select は置換要素なので ::after が描かれない。
+                tap-44 が効かないため、高さそのものを 44px 以上にする。 */}
+            <div className="no-print flex items-center gap-2 w-full md:w-auto font-sans">
               {!isVotingClosed && (
-                <select value={sortMode} onChange={e => setSortMode(e.target.value)} className="bg-white border border-slate-200 text-sm rounded-xl px-3 py-2 outline-none focus:ring-2 focus:ring-blue-300 flex-1 md:flex-none">
+                <select value={sortMode} onChange={e => setSortMode(e.target.value)} aria-label="作品の並び替え"
+                  className="bg-white border border-slate-200 text-sm rounded-xl px-3 py-2 min-h-[44px] outline-none focus:ring-2 focus:ring-blue-300 flex-1 md:flex-none">
                   <option value="newest">新しい順</option>
                   <option value="random">ランダム</option>
                 </select>
               )}
-              <button onClick={() => loadData(true)} disabled={isRefreshing} className="bg-white p-2 rounded-xl shadow-sm border border-slate-200 hover:bg-slate-50 text-slate-500 transition active:scale-95 disabled:opacity-50 flex-none">
+              <button onClick={() => loadData(true)} disabled={isRefreshing} aria-label="最新の作品を読み込む"
+                className="tap-44 bg-white p-2 rounded-xl shadow-sm border border-slate-200 hover:bg-slate-50 text-slate-500 transition active:scale-95 disabled:opacity-50 flex-none">
                 <div className={isRefreshing ? 'animate-spin' : ''}><Icons.Refresh /></div>
               </button>
             </div>
@@ -359,12 +425,17 @@
 
           {!isVotingClosed && (
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 md:gap-6">
+              {/* もとは onClick を付けた <div> だった。フォーカスできないため、
+                  キーボードだけを使う子は作品を開けず、投票もコメントもできなかった
+                  （実測：短冊5枚のうちフォーカスできるもの 0枚）。
+                  <button> にすると Enter と Space が最初から効く。 */}
               {sortedHaikus.map(haiku => (
-                <div key={haiku.id} onClick={() => setSelectedHaiku(haiku)}
-                  className="tanzaku bg-white p-4 rounded-xl shadow-md cursor-pointer hover:-translate-y-2 hover:shadow-xl transition-all duration-300 h-72 md:h-80 flex items-center justify-center text-xl leading-loose select-none relative group">
-                  <div className="absolute inset-0 bg-[#d9534f]/5 opacity-0 group-hover:opacity-100 rounded-xl transition-opacity"></div>
+                <button type="button" key={haiku.id} onClick={() => setSelectedHaiku(haiku)}
+                  aria-label={`${haiku.line1} ${haiku.line2} ${haiku.line3}　この作品をひらく`}
+                  className="tanzaku bg-white p-4 rounded-xl shadow-md cursor-pointer hover:-translate-y-2 hover:shadow-xl transition-all duration-300 h-72 md:h-80 w-full flex items-center justify-center text-xl leading-loose select-none relative group">
+                  <div aria-hidden="true" className="absolute inset-0 bg-[#d9534f]/5 opacity-0 group-hover:opacity-100 rounded-xl transition-opacity"></div>
                   {haiku.line1}<br/>{haiku.line2}<br/>{haiku.line3}
-                </div>
+                </button>
               ))}
               {sortedHaikus.length === 0 && <p className="col-span-full text-center py-20 text-slate-600 font-sans">まだ作品がありません。</p>}
             </div>
@@ -380,7 +451,8 @@
     const HaikuModal = ({ haiku, data, onClose, voterId, authorName, showToast, reload }) => {
       const [comment, setComment] = useState('');
       const [isSubmitting, setIsSubmitting] = useState(false);
-      
+      const dialogRef = useDialog(onClose);
+
       const isMyHaiku = haiku.author === authorName;
       const isVotingClosed = data.settings.votingStatus === '投票締切';
       const myVotes = data.myVotes || [];
@@ -416,15 +488,16 @@
       };
 
       return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-fade-in" onClick={onClose}>
-          <div className="bg-white w-full max-w-lg rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]" onClick={e => e.stopPropagation()}>
+        <div className="no-print fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-fade-in" onClick={onClose}>
+          <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="haiku-modal-title"
+            className="bg-white w-full max-w-lg rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]" onClick={e => e.stopPropagation()}>
             <div className="p-6 md:p-8 flex-1 overflow-y-auto">
               <div className="flex justify-end mb-2">
-                <button onClick={onClose} className="p-2 bg-slate-100 rounded-full hover:bg-slate-200"><Icons.Close /></button>
+                <button onClick={onClose} aria-label="閉じる" className="tap-44 p-2 bg-slate-100 rounded-full hover:bg-slate-200"><Icons.Close /></button>
               </div>
-              
+
               <div className="text-center mb-8">
-                <p className="text-3xl font-bold leading-relaxed">{haiku.line1}<br/>{haiku.line2}<br/>{haiku.line3}</p>
+                <p id="haiku-modal-title" className="text-3xl font-bold leading-relaxed">{haiku.line1}<br/>{haiku.line2}<br/>{haiku.line3}</p>
               </div>
 
               {!isVotingClosed && !isMyHaiku && (
@@ -461,9 +534,9 @@
 
               {!isVotingClosed && !isMyHaiku && (
                 <form onSubmit={handleComment} className="flex gap-2">
-                  <input type="text" value={comment} onChange={e => setComment(e.target.value)} placeholder="やさしい言葉をおくろう"
-                    className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 font-sans focus:outline-none focus:ring-2 focus:ring-blue-300" />
-                  <button type="submit" disabled={isSubmitting} className="bg-blue-600 text-white px-4 py-2 rounded-xl font-bold disabled:opacity-50">送信</button>
+                  <input type="text" value={comment} onChange={e => setComment(e.target.value)} placeholder="やさしい言葉をおくろう" aria-label="コメントを書く"
+                    className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 min-h-[44px] font-sans focus:outline-none focus:ring-2 focus:ring-blue-300" />
+                  <button type="submit" disabled={isSubmitting} className="bg-blue-600 text-white px-4 py-3 min-h-[44px] rounded-xl font-bold disabled:opacity-50">送信</button>
                 </form>
               )}
             </div>
@@ -504,7 +577,7 @@
                   <div className="flex items-center gap-4">
                     <span className="text-2xl font-bold text-yellow-600">{h.score}<span className="text-sm">点</span></span>
                     <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center group-open:rotate-180 transition-transform">
-                      <svg className="w-5 h-5 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7"/></svg>
+                      <svg aria-hidden="true" focusable="false" className="w-5 h-5 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7"/></svg>
                     </div>
                   </div>
                 </summary>
@@ -665,7 +738,7 @@
         <div className="max-w-4xl mx-auto space-y-8 animate-fade-in font-sans">
           <div className="flex justify-between items-end mb-6">
             <h2 className="text-3xl font-bold font-serif text-slate-800">管理ダッシュボード</h2>
-            <button onClick={loadDashboard} disabled={isProcessing} className="text-sm bg-white border border-slate-200 px-4 py-2 rounded-lg shadow-sm hover:bg-slate-50">↻ 最新の情報に更新</button>
+            <button onClick={loadDashboard} disabled={isProcessing} className="tap-44 text-sm bg-white border border-slate-200 px-4 py-2 min-h-[44px] rounded-lg shadow-sm hover:bg-slate-50">↻ 最新の情報に更新</button>
           </div>
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -698,8 +771,10 @@
                     <span className="text-xs bg-slate-200 px-2 py-1 rounded-md font-bold mr-2">{h.author}</span>
                     <span className={`text-lg font-serif ${h.isMuted ? 'line-through' : ''}`}>{h.haiku}</span>
                   </div>
+                  {/* 「隠す」の赤は bg-red-100 の上で比 3.95。1段濃くする。 */}
                   <button onClick={() => handleToggleMute(h.id, h.isMuted)} disabled={isProcessing}
-                    className={`px-4 py-2 rounded-lg font-bold text-sm transition-colors ${h.isMuted ? 'bg-slate-300 text-slate-700' : 'bg-red-100 text-red-600 hover:bg-red-200'}`}>
+                    aria-label={`${h.author} さんの作品「${h.haiku}」を${h.isMuted ? '広場に戻す' : '広場から隠す'}`}
+                    className={`px-4 py-2 min-h-[44px] rounded-lg font-bold text-sm transition-colors ${h.isMuted ? 'bg-slate-300 text-slate-700' : 'bg-red-100 text-red-700 hover:bg-red-200'}`}>
                     {h.isMuted ? '非表示中 (戻す)' : '👁️ 隠す'}
                   </button>
                 </div>
