@@ -180,8 +180,12 @@
               失敗は role="alert" ですぐ読ませる。目で見て気づけない子のための経路。 */}
           <div aria-live="polite" className="no-print fixed bottom-6 right-1/2 translate-x-1/2 sm:translate-x-0 sm:right-6 z-50 flex flex-col gap-2 pointer-events-none w-full max-w-sm px-4">
             {toasts.map(toast => (
+              // 白文字を載せる面。もとは成功 #8BAA7A で比 2.58、失敗 #d9534f で 3.96。
+              // トーストは一瞬しか出ないので、画面を歩くだけの計測では見つからなかった。
+              // 「投稿できた」「パスワードが違います」を伝える唯一の手段なので、
+              // 色相は変えず、白が乗る濃さまで落とす。
               <div key={toast.id} role={toast.type === 'success' ? 'status' : 'alert'}
-                className={`flex items-center gap-3 px-5 py-4 rounded-2xl shadow-xl text-white font-sans font-bold transform transition-all duration-300 ${toast.type === 'success' ? 'bg-[#8BAA7A]' : 'bg-[#d9534f]'}`}>
+                className={`flex items-center gap-3 px-5 py-4 rounded-2xl shadow-xl text-white font-sans font-bold transform transition-all duration-300 ${toast.type === 'success' ? 'bg-[#5C7A4B]' : 'bg-[#c9302c]'}`}>
                 {toast.type === 'success' ? <Icons.Check /> : <Icons.Close />}
                 <span className="flex-1 text-sm md:text-base">{toast.message}</span>
               </div>
