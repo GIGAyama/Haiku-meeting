@@ -257,7 +257,7 @@
               <h2 className="text-2xl md:text-3xl font-bold mb-3 relative z-10"><RubyText text="俳句" kana="はいく"/>を<RubyText text="投稿" kana="とうこう"/>しよう</h2>
               <div className="bg-white/20 backdrop-blur-sm px-4 py-2 rounded-xl inline-block relative z-10">
                 <span className="text-xs opacity-80 mr-2"><RubyText text="今回" kana="こんかい"/>のお<RubyText text="題" kana="だい"/>:</span>
-                <span className="text-xl font-bold text-yellow-300">{settings.theme}</span>
+                <span className="fs-theme font-bold text-yellow-300">{settings.theme}</span>
               </div>
             </div>
 
@@ -311,6 +311,24 @@
       const [isRefreshing, setIsRefreshing] = useState(false);
       const [selectedHaiku, setSelectedHaiku] = useState(null);
       const [sortMode, setSortMode] = useState('newest');
+      const [presenting, setPresenting] = useState(false);
+      const [showNames, setShowNames] = useState(false);
+
+      // 提示モード。教室の後ろの席から読めるように、字も余白も一緒に大きくする。
+      // 全画面は端末が断ることがあるので、断られても拡大だけは効くようにしてある。
+      const togglePresentation = async () => {
+        const next = !presenting;
+        setPresenting(next);
+        if (!next) setShowNames(false);
+        document.documentElement.classList.toggle('presentation', next);
+        try {
+          if (next && !document.fullscreenElement) await document.documentElement.requestFullscreen();
+          else if (!next && document.fullscreenElement) await document.exitFullscreen();
+        } catch (e) { /* 全画面を断られても提示モードそのものは使える */ }
+      };
+
+      // 別の画面へ移ったときに提示モードが残ると、児童の手元が巨大なままになる
+      useEffect(() => () => document.documentElement.classList.remove('presentation'), []);
 
       const loadData = useCallback(async (isRefresh = false) => {
         if (!isRefresh) setLoading(true);
@@ -369,9 +387,13 @@
             <div className={`bg-white p-6 rounded-3xl shadow-xl border-t-8 ${borderClass} transform hover:-translate-y-1 transition-transform`}>
               <h3 className={`text-2xl font-bold mb-4 text-center ${colorClass}`}>{title} ({score}点)</h3>
               {winners.map((w, i) => (
+                // 提示モードでは名前を既定で伏せる。電子黒板は教室の外からも見える。
+                // 先生が「名前を出す」を押したときだけ出す。
                 <div key={i} className="mb-4 text-center border-b border-slate-100 pb-4 last:border-0">
-                  <p className="text-xl mb-2">{w.haiku}</p>
-                  <p className="text-slate-600 font-bold">{w.publicName || w.author}</p>
+                  <p className="fs-haiku mb-2">{w.haiku}</p>
+                  <p className="text-slate-600 font-bold">
+                    {presenting && !showNames ? '〇〇〇' : (w.publicName || w.author)}
+                  </p>
                 </div>
               ))}
             </div>
@@ -406,7 +428,24 @@
             
             {/* select は置換要素なので ::after が描かれない。
                 tap-44 が効かないため、高さそのものを 44px 以上にする。 */}
-            <div className="no-print flex items-center gap-2 w-full md:w-auto font-sans">
+            <div className="no-print flex flex-wrap items-center gap-2 w-full md:w-auto font-sans">
+              {/* 一斉授業で電子黒板に映すためのもの。§2-11 */}
+              <button onClick={togglePresentation} aria-pressed={presenting}
+                className="tap-44 bg-white border border-slate-200 text-sm rounded-xl px-3 py-2 min-h-[44px] shadow-sm hover:bg-slate-50 text-slate-700 font-bold">
+                {presenting ? '🖥 もとの大きさ' : '🖥 大きく表示'}
+              </button>
+              {presenting && isVotingClosed && (
+                <button onClick={() => setShowNames(v => !v)} aria-pressed={showNames}
+                  className="tap-44 bg-white border border-slate-200 text-sm rounded-xl px-3 py-2 min-h-[44px] shadow-sm hover:bg-slate-50 text-slate-700 font-bold">
+                  {showNames ? '名前を伏せる' : '名前を出す'}
+                </button>
+              )}
+              {isVotingClosed && (
+                <button onClick={() => window.print()}
+                  className="tap-44 bg-white border border-slate-200 text-sm rounded-xl px-3 py-2 min-h-[44px] shadow-sm hover:bg-slate-50 text-slate-700 font-bold">
+                  🖨 印刷
+                </button>
+              )}
               {!isVotingClosed && (
                 <select value={sortMode} onChange={e => setSortMode(e.target.value)} aria-label="作品の並び替え"
                   className="bg-white border border-slate-200 text-sm rounded-xl px-3 py-2 min-h-[44px] outline-none focus:ring-2 focus:ring-blue-300 flex-1 md:flex-none">
@@ -432,7 +471,7 @@
               {sortedHaikus.map(haiku => (
                 <button type="button" key={haiku.id} onClick={() => setSelectedHaiku(haiku)}
                   aria-label={`${haiku.line1} ${haiku.line2} ${haiku.line3}　この作品をひらく`}
-                  className="tanzaku bg-white p-4 rounded-xl shadow-md cursor-pointer hover:-translate-y-2 hover:shadow-xl transition-all duration-300 h-72 md:h-80 w-full flex items-center justify-center text-xl leading-loose select-none relative group">
+                  className="tanzaku bg-white p-4 rounded-xl shadow-md cursor-pointer hover:-translate-y-2 hover:shadow-xl transition-all duration-300 h-72 md:h-80 w-full flex items-center justify-center fs-haiku leading-loose select-none relative group">
                   <div aria-hidden="true" className="absolute inset-0 bg-[#d9534f]/5 opacity-0 group-hover:opacity-100 rounded-xl transition-opacity"></div>
                   {haiku.line1}<br/>{haiku.line2}<br/>{haiku.line3}
                 </button>
@@ -497,7 +536,7 @@
               </div>
 
               <div className="text-center mb-8">
-                <p id="haiku-modal-title" className="text-3xl font-bold leading-relaxed">{haiku.line1}<br/>{haiku.line2}<br/>{haiku.line3}</p>
+                <p id="haiku-modal-title" className="fs-haiku-lg font-bold leading-relaxed">{haiku.line1}<br/>{haiku.line2}<br/>{haiku.line3}</p>
               </div>
 
               {!isVotingClosed && !isMyHaiku && (

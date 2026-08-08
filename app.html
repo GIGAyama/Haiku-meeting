@@ -538,7 +538,7 @@ const HomeView = ({
     text: "題",
     kana: "だい"
   }), ":"), /*#__PURE__*/React.createElement("span", {
-    className: "text-xl font-bold text-yellow-300"
+    className: "fs-theme font-bold text-yellow-300"
   }, settings.theme))), /*#__PURE__*/React.createElement("form", {
     onSubmit: handleSubmit,
     className: "bg-white p-6 rounded-3xl shadow-xl border border-slate-100"
@@ -635,6 +635,23 @@ const PlazaView = ({
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [selectedHaiku, setSelectedHaiku] = useState(null);
   const [sortMode, setSortMode] = useState('newest');
+  const [presenting, setPresenting] = useState(false);
+  const [showNames, setShowNames] = useState(false);
+
+  // 提示モード。教室の後ろの席から読めるように、字も余白も一緒に大きくする。
+  // 全画面は端末が断ることがあるので、断られても拡大だけは効くようにしてある。
+  const togglePresentation = async () => {
+    const next = !presenting;
+    setPresenting(next);
+    if (!next) setShowNames(false);
+    document.documentElement.classList.toggle('presentation', next);
+    try {
+      if (next && !document.fullscreenElement) await document.documentElement.requestFullscreen();else if (!next && document.fullscreenElement) await document.exitFullscreen();
+    } catch (e) {/* 全画面を断られても提示モードそのものは使える */}
+  };
+
+  // 別の画面へ移ったときに提示モードが残ると、児童の手元が巨大なままになる
+  useEffect(() => () => document.documentElement.classList.remove('presentation'), []);
   const loadData = useCallback(async (isRefresh = false) => {
     if (!isRefresh) setLoading(true);else setIsRefreshing(true);
     try {
@@ -686,14 +703,18 @@ const PlazaView = ({
         className: `bg-white p-6 rounded-3xl shadow-xl border-t-8 ${borderClass} transform hover:-translate-y-1 transition-transform`
       }, /*#__PURE__*/React.createElement("h3", {
         className: `text-2xl font-bold mb-4 text-center ${colorClass}`
-      }, title, " (", score, "点)"), winners.map((w, i) => /*#__PURE__*/React.createElement("div", {
+      }, title, " (", score, "点)"), winners.map((w, i) =>
+      /*#__PURE__*/
+      // 提示モードでは名前を既定で伏せる。電子黒板は教室の外からも見える。
+      // 先生が「名前を出す」を押したときだけ出す。
+      React.createElement("div", {
         key: i,
         className: "mb-4 text-center border-b border-slate-100 pb-4 last:border-0"
       }, /*#__PURE__*/React.createElement("p", {
-        className: "text-xl mb-2"
+        className: "fs-haiku mb-2"
       }, w.haiku), /*#__PURE__*/React.createElement("p", {
         className: "text-slate-600 font-bold"
-      }, w.publicName || w.author))));
+      }, presenting && !showNames ? '〇〇〇' : w.publicName || w.author))));
     };
     return /*#__PURE__*/React.createElement("div", {
       className: "mb-12 animate-fade-in-up"
@@ -726,8 +747,19 @@ const PlazaView = ({
   }, "状態: ", /*#__PURE__*/React.createElement("span", {
     className: isVotingClosed ? 'text-red-600' : 'text-green-700'
   }, data.settings.votingStatus))), /*#__PURE__*/React.createElement("div", {
-    className: "no-print flex items-center gap-2 w-full md:w-auto font-sans"
-  }, !isVotingClosed && /*#__PURE__*/React.createElement("select", {
+    className: "no-print flex flex-wrap items-center gap-2 w-full md:w-auto font-sans"
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: togglePresentation,
+    "aria-pressed": presenting,
+    className: "tap-44 bg-white border border-slate-200 text-sm rounded-xl px-3 py-2 min-h-[44px] shadow-sm hover:bg-slate-50 text-slate-700 font-bold"
+  }, presenting ? '🖥 もとの大きさ' : '🖥 大きく表示'), presenting && isVotingClosed && /*#__PURE__*/React.createElement("button", {
+    onClick: () => setShowNames(v => !v),
+    "aria-pressed": showNames,
+    className: "tap-44 bg-white border border-slate-200 text-sm rounded-xl px-3 py-2 min-h-[44px] shadow-sm hover:bg-slate-50 text-slate-700 font-bold"
+  }, showNames ? '名前を伏せる' : '名前を出す'), isVotingClosed && /*#__PURE__*/React.createElement("button", {
+    onClick: () => window.print(),
+    className: "tap-44 bg-white border border-slate-200 text-sm rounded-xl px-3 py-2 min-h-[44px] shadow-sm hover:bg-slate-50 text-slate-700 font-bold"
+  }, "🖨 印刷"), !isVotingClosed && /*#__PURE__*/React.createElement("select", {
     value: sortMode,
     onChange: e => setSortMode(e.target.value),
     "aria-label": "作品の並び替え",
@@ -750,7 +782,7 @@ const PlazaView = ({
     key: haiku.id,
     onClick: () => setSelectedHaiku(haiku),
     "aria-label": `${haiku.line1} ${haiku.line2} ${haiku.line3}　この作品をひらく`,
-    className: "tanzaku bg-white p-4 rounded-xl shadow-md cursor-pointer hover:-translate-y-2 hover:shadow-xl transition-all duration-300 h-72 md:h-80 w-full flex items-center justify-center text-xl leading-loose select-none relative group"
+    className: "tanzaku bg-white p-4 rounded-xl shadow-md cursor-pointer hover:-translate-y-2 hover:shadow-xl transition-all duration-300 h-72 md:h-80 w-full flex items-center justify-center fs-haiku leading-loose select-none relative group"
   }, /*#__PURE__*/React.createElement("div", {
     "aria-hidden": "true",
     className: "absolute inset-0 bg-[#d9534f]/5 opacity-0 group-hover:opacity-100 rounded-xl transition-opacity"
@@ -835,7 +867,7 @@ const HaikuModal = ({
     className: "text-center mb-8"
   }, /*#__PURE__*/React.createElement("p", {
     id: "haiku-modal-title",
-    className: "text-3xl font-bold leading-relaxed"
+    className: "fs-haiku-lg font-bold leading-relaxed"
   }, haiku.line1, /*#__PURE__*/React.createElement("br", null), haiku.line2, /*#__PURE__*/React.createElement("br", null), haiku.line3)), !isVotingClosed && !isMyHaiku && /*#__PURE__*/React.createElement("div", {
     className: "mb-8 bg-slate-50 p-4 rounded-2xl border border-slate-100"
   }, /*#__PURE__*/React.createElement("h3", {

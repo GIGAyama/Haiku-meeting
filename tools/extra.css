@@ -68,6 +68,69 @@ button rt,
 /* キーボードで操作しているときだけ、はっきりした枠を出す */
 :focus-visible { outline: 3px solid #7f1d1d; outline-offset: 2px; }
 
+/* ───────────────────────────────────────────────────────────
+   文字サイズ。固定 px だと 320px のスマホではみ出し、電子黒板では小さい。
+   メディアクエリを何段も書かず、児童が見る「主役」だけに clamp() を当てる。
+   ─────────────────────────────────────────────────────────── */
+:root {
+  --fs-theme:    clamp(20px, 2.4vw + 12px, 32px);  /* 今回のお題 */
+  --fs-haiku:    clamp(18px, 1.2vw + 12px, 26px);  /* 短冊の俳句 */
+  --fs-haiku-lg: clamp(24px, 3.2vw + 14px, 40px);  /* 開いたときの俳句 */
+}
+.fs-theme    { font-size: var(--fs-theme); }
+.fs-haiku    { font-size: var(--fs-haiku); }
+.fs-haiku-lg { font-size: var(--fs-haiku-lg); }
+
+/* ───────────────────────────────────────────────────────────
+   提示モード（電子黒板・一斉授業）。教室の後ろの席から読めることが要件。
+
+   ⚠️ 仕様の「body に 150%」は、この画面では効かない。
+      Tailwind の text-* はすべて rem で、rem は body ではなく html を見る。
+      body に当てても、クラスの付いた文字（＝ほぼ全部）は大きくならない。
+      html 側に当てると、字も余白も一緒に拡大する。
+   ─────────────────────────────────────────────────────────── */
+:root.presentation {
+  font-size: 150%;
+  --fs-theme:    clamp(32px, 3.5vw + 18px, 64px);
+  --fs-haiku:    clamp(26px, 2.2vw + 16px, 56px);
+  --fs-haiku-lg: clamp(40px, 5vw, 96px);
+}
+:root.presentation button { min-height: 56px; }
+
+/* ───────────────────────────────────────────────────────────
+   印刷。句会の結果や過去の作品を紙で配るための最低限。
+   ⚠️ 短冊は <button> なので、button を丸ごと消すと作品まで消える。
+      消すのは .no-print を付けたものだけにする。
+   ─────────────────────────────────────────────────────────── */
+@media print {
+  @page { size: A4 portrait; margin: 12mm; }
+  html, body {
+    height: auto !important;
+    overflow: visible !important;
+    background: #fff !important;
+  }
+  body {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+    font-size: 10.5pt;
+    line-height: 1.6;
+  }
+  .no-print { display: none !important; }
+  /* 紙吹雪は canvas-confetti が body に直に足すので、クラスを付けられない。
+     実際に印刷してみたら、結果発表の紙に紙吹雪が刷り込まれていた。
+     この画面で canvas を使っているのは紙吹雪だけなので、まとめて消す。 */
+  canvas { display: none !important; }
+  /* 画面は 100dvh で固定しているので、紙では高さを解く */
+  .app-shell { height: auto !important; display: block !important; }
+  main { overflow: visible !important; padding: 0 !important; }
+  /* 作品が2ページに割れないようにする */
+  .tanzaku { break-inside: avoid; box-shadow: none !important; height: 62mm !important; }
+  .fs-haiku { font-size: 12pt; }
+  .fs-haiku-lg { font-size: 16pt; }
+  details { break-inside: avoid; }
+  a[href]::after { content: ""; }   /* URL を併記しない */
+}
+
 /* 押せるものは、見た目を変えずに当たり判定だけ 44px 以上にする */
 .tap-44 { position: relative; }
 .tap-44::after {
