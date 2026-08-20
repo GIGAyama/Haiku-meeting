@@ -23,7 +23,11 @@
               case 'getMyHaikus': return resolve([]);
               case 'getArchiveList': return resolve([]);
               case 'getArchiveData': return resolve([]);
-              case 'checkAdminPassword': return resolve(args[0] === '1234' ? { success: true, token: 'mock-token' } : { success: false });
+              case 'getAdminSetupState': return resolve({ needsSetup: false, minLength: 6 });
+              case 'setupAdminPassword': return resolve({ success: true, token: 'mock-token', message: 'パスワードを設定しました。' });
+              // 本物はハッシュで照合する。ここは GAS の外で画面を見るためのダミーなので、
+              // 長さだけ見て通す。決め打ちの合言葉は置かない。
+              case 'checkAdminPassword': return resolve(String(args[0] || '').length >= 6 ? { success: true, token: 'mock-token' } : { success: false });
               default: return resolve({ success: true, name: args[0] || '名無し', message: '成功' });
             }
           }, 500);
@@ -131,9 +135,9 @@
 
       const renderView = () => {
         switch (currentView) {
-          case 'home': return <HomeView authorName={authorName} setAuthorName={setAuthorName} showToast={showToast} goTo={setCurrentView} />;
+          case 'home': return <HomeView authorName={authorName} setAuthorName={setAuthorName} voterId={voterId} showToast={showToast} goTo={setCurrentView} />;
           case 'plaza': return <PlazaView voterId={voterId} authorName={authorName} showToast={showToast} />;
-          case 'mypage': return <MyPageView authorName={authorName} showToast={showToast} goTo={setCurrentView} />;
+          case 'mypage': return <MyPageView authorName={authorName} voterId={voterId} showToast={showToast} goTo={setCurrentView} />;
           case 'archives': return <ArchiveView showToast={showToast} />;
           case 'admin': return <AdminView showToast={showToast} />;
           default: return <HomeView />;
@@ -222,7 +226,7 @@
     // =====================================================================
     // 1. ホーム画面（リアルタイムプレビュー修正対応）
     // =====================================================================
-    const HomeView = ({ authorName, setAuthorName, showToast, goTo }) => {
+    const HomeView = ({ authorName, setAuthorName, voterId, showToast, goTo }) => {
       const [settings, setSettings] = useState({ theme: '...', votingStatus: '...' });
       const [lines, setLines] = useState({ line1: '', line2: '', line3: '' });
       const [isSubmitting, setIsSubmitting] = useState(false);
@@ -234,7 +238,9 @@
         if (!authorName.trim() || !lines.line1 || !lines.line2 || !lines.line3) return showToast('すべての項目を入力してください', 'error');
         setIsSubmitting(true);
         try {
-          const res = await runGas('submitHaiku', authorName, lines.line1, lines.line2, lines.line3);
+          // 端末ごとの識別子も一緒に送る。マイページで「自分の作品だけ」を出すために、
+          // サーバー側がこの値を俳句シートの K列 に控える。
+          const res = await runGas('submitHaiku', authorName, lines.line1, lines.line2, lines.line3, voterId);
           if (res && res.success) {
             localStorage.setItem('giga_author_name', authorName);
             showToast('俳句を投稿しました！');
@@ -596,13 +602,15 @@
     // =====================================================================
     // 3. マイページ & 4. 過去の句会
     // =====================================================================
-    const MyPageView = ({ authorName, showToast, goTo }) => {
+    const MyPageView = ({ authorName, voterId, showToast, goTo }) => {
       const [haikus, setHaikus] = useState([]);
       const [loading, setLoading] = useState(true);
       useEffect(() => {
-        if (!authorName) return setLoading(false);
-        runGas('getMyHaikus', authorName).then(data => { if(data) setHaikus(data); setLoading(false); }).catch(() => { showToast('取得失敗', 'error'); setLoading(false); });
-      }, [authorName, showToast]);
+        if (!authorName || !voterId) return setLoading(false);
+        // 名前ではなく端末ごとの識別子で聞く。名前で聞いていたころは、
+        // 友だちの名前を入れれば、その子の作品ともらったコメントまで読めた。
+        runGas('getMyHaikus', voterId).then(data => { if(data) setHaikus(data); setLoading(false); }).catch(() => { showToast('取得失敗', 'error'); setLoading(false); });
+      }, [authorName, voterId, showToast]);
 
       if (!authorName) return (
         <div className="text-center py-20"><p className="text-xl mb-6">まだ名前が登録されていません。</p><button onClick={() => goTo('home')} className="bg-[#3c4a6d] text-white px-8 py-4 rounded-full font-bold shadow-lg">投稿画面へ</button></div>
@@ -614,7 +622,7 @@
           <h2 className="text-3xl font-bold mb-2 text-center"><RubyText text="自分" kana="じぶん"/>の<RubyText text="作品" kana="さくひん"/></h2>
           <p className="text-center text-slate-500 mb-8">{authorName} さんの記録</p>
           <div className="space-y-4">
-            {haikus.length === 0 ? <p className="text-center bg-white p-8 rounded-2xl shadow">まだ作品がありません。</p> :
+            {haikus.length === 0 ? <p className="text-center bg-white p-8 rounded-2xl shadow">まだ作品がありません。<br/><span className="text-sm text-slate-600">（ここに出るのは、この端末から出した作品だけです）</span></p> :
              haikus.map(h => (
               <details key={h.id} className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden group">
                 <summary className="p-6 cursor-pointer list-none flex justify-between items-center hover:bg-slate-50 transition-colors">
@@ -706,6 +714,23 @@
       // サーバーから受け取る合鍵。管理者向けの処理はこれを添えないと通らない。
       // 画面を離れると消える（もともとログイン状態も残らない作りだった）。
       const [token, setToken] = useState('');
+      // 合言葉がまだ決まっていないか。null は「サーバーに聞いている最中」。
+      // 初期パスワードを廃止したので、いちばん最初だけ設定画面を出す。
+      const [needsSetup, setNeedsSetup] = useState(null);
+      const [minLength, setMinLength] = useState(6);
+      const [setupPass, setSetupPass] = useState('');
+      const [setupPass2, setSetupPass2] = useState('');
+
+      useEffect(() => {
+        runGas('getAdminSetupState')
+          .then(res => {
+            if (!res) return setNeedsSetup(false);
+            setNeedsSetup(!!res.needsSetup);
+            if (res.minLength) setMinLength(res.minLength);
+          })
+          // 聞けなかったときは、いつもの入力画面を出す（設定画面を勝手に出さない）
+          .catch(() => setNeedsSetup(false));
+      }, []);
 
       const loadDashboard = async (tk) => {
         const data = await runGas('getAdminDashboardData', tk || token);
@@ -728,7 +753,33 @@
             setToken(res.token);
             setIsLoggedIn(true);
             await loadDashboard(res.token);
+          } else if (res && res.needsSetup) {
+            setNeedsSetup(true);
+            showToast('まだパスワードが決まっていません。先に決めてください。', 'error');
           } else showToast('パスワードが違います', 'error');
+        });
+      };
+
+      // いちばん最初の1回だけ通る。決めた合言葉でそのまま入る。
+      const handleSetup = async (e) => {
+        e.preventDefault();
+        if (setupPass !== setupPass2) return showToast('2つの欄が同じになっていません', 'error');
+        await run(async () => {
+          const res = await runGas('setupAdminPassword', setupPass);
+          if (res && res.success) {
+            setToken(res.token);
+            setNeedsSetup(false);
+            // 「パスワードの変更」は現在のパスワードを使うので、ここで覚えておく
+            setPassword(setupPass);
+            setSetupPass(''); setSetupPass2('');
+            setIsLoggedIn(true);
+            showToast(res.message || 'パスワードを設定しました');
+            await loadDashboard(res.token);
+          } else {
+            // ほかの端末に先を越されたときもここに来る。入力画面に切り替える。
+            setNeedsSetup(false);
+            showToast(res?.message || '設定できませんでした', 'error');
+          }
         });
       };
 
@@ -769,11 +820,38 @@
         });
       };
 
+      // サーバーに「もう決まっているか」を聞いている間。
+      // ここで入力画面を先に出すと、設定画面と一瞬入れ替わってちらつく。
+      if (!isLoggedIn && needsSetup === null) return <Skeleton className="h-64" />;
+
+      if (!isLoggedIn && needsSetup) return (
+        <div className="max-w-md mx-auto bg-white p-8 rounded-3xl shadow-xl mt-10 font-sans">
+          <h2 className="text-2xl font-bold text-center mb-2">最初にパスワードを決めます</h2>
+          <p className="text-sm text-slate-600 mb-6 leading-relaxed">
+            このアプリに初期パスワードはありません。<br/>
+            いちばん最初に開いた先生が、ここで決めてください。<br/>
+            一度決めたら、この画面はもう出ません。
+          </p>
+          <form onSubmit={handleSetup} className="space-y-4">
+            <input type="password" value={setupPass} onChange={e => setSetupPass(e.target.value)} required
+              placeholder={`あたらしいパスワード（${minLength}文字以上）`} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl outline-none" />
+            <input type="password" value={setupPass2} onChange={e => setSetupPass2(e.target.value)} required
+              placeholder="もう一度おなじものを入力" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl outline-none" />
+            <button type="submit" disabled={isProcessing} className="w-full bg-slate-800 text-white font-bold py-4 rounded-xl shadow-md transition">{isProcessing ? '設定中...' : 'このパスワードにする'}</button>
+          </form>
+          <p className="text-xs text-slate-600 mt-4 leading-relaxed">
+            ⚠️ 児童も同じ URL を開けます。<strong>この画面が出ているあいだは誰でも決められる</strong>ので、
+            児童に URL を配る前に決めてください。忘れたときは、GAS の「スクリプト プロパティ」から
+            <code>ADMIN_PASSWORD_HASH</code> を消すと、この画面に戻せます。
+          </p>
+        </div>
+      );
+
       if (!isLoggedIn) return (
         <div className="max-w-md mx-auto bg-white p-8 rounded-3xl shadow-xl mt-10 font-sans">
           <h2 className="text-2xl font-bold text-center mb-6">先生用 管理画面</h2>
           <form onSubmit={handleLogin} className="space-y-4">
-            <input type="password" value={password} onChange={e => setPassword(e.target.value)} required placeholder="パスワード（初期値: 1234）" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl outline-none" />
+            <input type="password" value={password} onChange={e => setPassword(e.target.value)} required placeholder="パスワード" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl outline-none" />
             <button type="submit" disabled={isProcessing} className="w-full bg-slate-800 text-white font-bold py-4 rounded-xl shadow-md transition">{isProcessing ? '確認中...' : '入室する'}</button>
           </form>
         </div>
@@ -852,7 +930,7 @@
             <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100">
                <h3 className="text-xl font-bold mb-4 border-b pb-2">パスワードの変更</h3>
                <form onSubmit={handleChangePass} className="flex gap-4">
-                  <input type="password" value={newPass} onChange={e => setNewPass(e.target.value)} placeholder="新パスワード" required className="flex-1 p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none" />
+                  <input type="password" value={newPass} onChange={e => setNewPass(e.target.value)} placeholder={`新パスワード（${minLength}文字以上）`} required className="flex-1 p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none" />
                   <button type="submit" disabled={isProcessing} className="bg-slate-800 text-white px-6 font-bold rounded-xl disabled:opacity-50">変更</button>
                </form>
             </div>

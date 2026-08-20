@@ -76,7 +76,7 @@ README.md ではなく、コードと実測から取っています。
 | 最初に読み込む量はあわせて250キロバイトほど | 実測 index 1.2 ＋ vendor 156.5 ＋ css 32.3 ＋ app 60.0 = 250.0 KB |
 | 金3点・銀2点・銅1点、1人3票 | `src/app.jsx` の HaikuModal と `code.gs` の submitVote（サーバー側でも二重投票を弾いている） |
 | 同点は並記、0点は賞に入らない | `src/app.jsx` の ResultsArea |
-| 初期の合言葉は 1234 | `code.gs` の getDbSpreadsheet |
+| 初期の合言葉は無く、最初に開いた先生が決める | `code.gs` の setupAdminPassword / getAdminSetupState |
 | 提示モードは1.5倍 | `tools/extra.css` の `:root.presentation { font-size: 150% }` |
 | 印刷はA4の縦 | `tools/extra.css` の `@page { size: A4 portrait }` |
 | 横棒の目安は 40人 / 120句 / 120票 / 200件 | `src/app.jsx` の StatCard の max |
