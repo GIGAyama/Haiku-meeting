@@ -18,7 +18,11 @@ function getDbSpreadsheet() {
         const ss = SpreadsheetApp.create('【自動生成】GIGA句会プラザ_DB');
         dbId = ss.getId();
         props.setProperty('DB_SPREADSHEET_ID', dbId);
-        props.setProperty('ADMIN_PASSWORD', '1234');
+        // 合言葉の初期値は置かない。
+        // 以前はここで '1234' を入れ、README にもそう書いていた。
+        // 変え忘れた学級では、URL を知っている児童が誰でも先生として入れてしまう。
+        // 未設定のまま始め、先生が最初に先生用タブを開いたときに決めてもらう
+        // （setupAdminPassword）。決めた合言葉はハッシュにして持つ。
 
         const sheet1 = ss.getSheets()[0];
         sheet1.setName('設定');
@@ -27,7 +31,9 @@ function getDbSpreadsheet() {
         
         const sheet2 = ss.insertSheet('俳句');
         // J列（10列目）に非表示(ミュート)フラグを隠しデータとして持ちます
-        sheet2.appendRow(['ID', '名前', '投稿日時', '俳句', '上の句', '中の句', '下の句', '得点', '公開名', 'ミュート']);
+        // K列（11列目）は投稿した端末の識別子。マイページで「自分の作品だけ」を
+        // 返すときに突き合わせます。児童には見せません。
+        sheet2.appendRow(['ID', '名前', '投稿日時', '俳句', '上の句', '中の句', '下の句', '得点', '公開名', 'ミュート', '投稿者ID']);
         
         const sheet3 = ss.insertSheet('コメント');
         sheet3.appendRow(['投稿日時', '俳句ID', 'コメント投稿者', 'コメント']);
@@ -35,7 +41,7 @@ function getDbSpreadsheet() {
         const sheet4 = ss.insertSheet('投票');
         sheet4.appendRow(['投票日時', '俳句ID', '点数', '投票者ID']);
         
-        ss.getSheets().forEach(s => s.getRange('A1:J1').setBackground('#f3f4f6'));
+        ss.getSheets().forEach(s => s.getRange('A1:K1').setBackground('#f3f4f6'));
       }
     } catch (e) {
       throw new Error('アクセスが集中しています。少し待ってから再度読み込んでください。');
@@ -124,7 +130,34 @@ function getPlazaData(voterId, myName) {
   return { haikus, comments, myVotes, settings };
 }
 
-function getMyHaikus(authorName) {
+/**
+ * マイページ。自分の作品と、その作品にもらったコメントを返す。
+ *
+ * ⚠️ もとは名前（B列）だけで絞っていた。google.script.run で呼べる関数は
+ *    画面に出ていなくても誰でも呼べるので、開発者ツールから
+ *
+ *      google.script.run.getMyHaikus('花子')
+ *
+ *    と打てば、その子の全作品と、その子がもらったコメントまで読めた。
+ *    名前は自己申告で、合言葉ではない。
+ *
+ *    このアプリは「実行するユーザー: 自分（先生）」で配る作りなので、
+ *    サーバー側で Session.getActiveUser() を見ても空になり、
+ *    いま呼んでいるのが誰なのかを Google 側から知る手段がない。
+ *    そこで、投票の重複判定にもともと使っている**端末ごとの識別子**
+ *    （投票者ID／localStorage の giga_voter_id）を投稿時にも K列 に残し、
+ *    それが一致する行だけを返すことにした。
+ *    識別子は自分の端末の中にしかないので、他人の分は打ちようがない。
+ *
+ *    完全ではない。同じ端末を別の子が使えば見えるし、端末を替えたり
+ *    ブラウザの記録を消したりすると自分の分も見えなくなる。
+ *    「他人の名前を打てば読める」を無くすための、GAS でできる線引き。
+ *
+ * @param authorId 端末ごとの識別子（投票に使っているものと同じ）
+ */
+function getMyHaikus(authorId) {
+  if (!authorId) return [];
+
   const ss = getDbSpreadsheet();
   const sheets = ss.getSheets();
   const myHaikus = [];
@@ -134,11 +167,28 @@ function getMyHaikus(authorName) {
     commentSheetsData.push(...s.getDataRange().getValues().slice(1));
   });
 
-  sheets.filter(s => s.getName().startsWith('俳句')).forEach(sheet => {
-    const data = sheet.getDataRange().getValues().slice(1);
-    const filtered = data.filter(row => row[1] === authorName);
-    
-    filtered.forEach(row => {
+  const haikuSheets = sheets.filter(s => s.getName().startsWith('俳句'))
+    .map(sheet => ({ sheet: sheet, rows: sheet.getDataRange().getValues().slice(1) }));
+
+  // この端末が実際に名乗ってきた名前を集める（K列が一致する行の B列）。
+  const myNames = {};
+  haikuSheets.forEach(entry => {
+    entry.rows.forEach(row => {
+      if (row[10] && String(row[10]) === String(authorId)) myNames[String(row[1])] = true;
+    });
+  });
+
+  const isMine = (row) => {
+    // K列がある行は、識別子が合ったときだけ自分のもの。
+    if (row[10]) return String(row[10]) === String(authorId);
+    // K列を足す前に投稿された古い行には識別子が無い。名前だけで返すと元の穴に
+    // 戻るので、「この端末がその名前で実際に投稿している」ことを確かめてから見せる。
+    return !!myNames[String(row[1])];
+  };
+
+  haikuSheets.forEach(entry => {
+    const sheet = entry.sheet;
+    entry.rows.filter(isMine).forEach(row => {
       const haikuId = row[0];
       const comments = commentSheetsData.filter(c => c[1] === haikuId).map(c => ({ commenter: c[2], comment: c[3] }));
       myHaikus.push({
@@ -166,13 +216,17 @@ function getArchiveData(sheetName) {
   return data.map(row => ({ haiku: row[3], publicName: row[8] || '（作者非公開）' }));
 }
 
-function submitHaiku(name, line1, line2, line3) {
+/**
+ * 俳句を1句ぶん記録する。
+ * @param authorId 端末ごとの識別子。K列に残し、マイページで自分の作品を出すときに使う。
+ */
+function submitHaiku(name, line1, line2, line3, authorId) {
   try {
     const ss = getDbSpreadsheet();
     const sheet = ss.getSheetByName('俳句');
     const haikuText = `${line1} ${line2} ${line3}`;
     const newId = new Date().getTime();
-    sheet.appendRow([newId, name, new Date(), haikuText, line1, line2, line3, 0, "", false]);
+    sheet.appendRow([newId, name, new Date(), haikuText, line1, line2, line3, 0, "", false, authorId || '']);
     return { success: true, name: name };
   } catch (e) { return { success: false, message: e.message }; }
 }
@@ -251,14 +305,102 @@ function requireAdmin_(token) {
   }
 }
 
-function checkAdminPassword(password) {
+/**
+ * 合言葉の持ち方。
+ *
+ * ⚠️ もとはスクリプトプロパティ ADMIN_PASSWORD に**そのままの文字**で入れていた。
+ *    しかも初期値が '1234' で、README にもそう書いてあった。
+ *    ・変え忘れた学級では、URL を知っている児童が誰でも先生用画面に入れる
+ *    ・スプレッドシートや GAS を共同編集できる人には、合言葉がそのまま読める
+ *
+ *    いまは SHA-256 のハッシュだけを持ち、初期値そのものを置かない。
+ *    先生がいちばん最初に先生用タブを開いたときに決めてもらう（setupAdminPassword）。
+ *    学級ごとの「まぜる文字列」（塩）を混ぜてから digest を取るので、
+ *    よくある合言葉の一覧表と照らし合わせる手も通りにくい。
+ *
+ *    ハッシュは元に戻せない。忘れたときは GAS エディタの
+ *    「プロジェクトの設定」＞「スクリプト プロパティ」で ADMIN_PASSWORD_HASH を
+ *    消せば、また最初の設定画面から決め直せる。
+ */
+var ADMIN_HASH_KEY_ = 'ADMIN_PASSWORD_HASH';
+var ADMIN_SALT_KEY_ = 'ADMIN_PASSWORD_SALT';
+var ADMIN_PASSWORD_MIN_ = 6;   // 4桁だと1秒待たせても総当たりが現実的な範囲に入る
+
+function adminSalt_() {
   const props = PropertiesService.getScriptProperties();
-  if (password === props.getProperty('ADMIN_PASSWORD')) {
+  let salt = props.getProperty(ADMIN_SALT_KEY_);
+  if (!salt) {
+    salt = Utilities.getUuid();
+    props.setProperty(ADMIN_SALT_KEY_, salt);
+  }
+  return salt;
+}
+
+function hashAdminPassword_(password) {
+  const bytes = Utilities.computeDigest(
+    Utilities.DigestAlgorithm.SHA_256,
+    adminSalt_() + ':' + String(password),
+    Utilities.Charset.UTF_8
+  );
+  // computeDigest は符号つきのバイト列（-128〜127）を返す。
+  // そのまま繋ぐと桁が揃わないので、1バイトずつ2桁の16進に直す。
+  return bytes.map(function (b) { return ('0' + (b & 0xff).toString(16)).slice(-2); }).join('');
+}
+
+/**
+ * 前の版から引き継いだ平文の ADMIN_PASSWORD があれば、ハッシュに移して平文を消す。
+ * すでに使っている学級が、いままでの合言葉のまま入り続けられるようにするため。
+ */
+function migrateAdminPassword_() {
+  const props = PropertiesService.getScriptProperties();
+  const plain = props.getProperty('ADMIN_PASSWORD');
+  if (!plain) return;
+  if (!props.getProperty(ADMIN_HASH_KEY_)) {
+    props.setProperty(ADMIN_HASH_KEY_, hashAdminPassword_(plain));
+  }
+  props.deleteProperty('ADMIN_PASSWORD');
+}
+
+function storedAdminHash_() {
+  migrateAdminPassword_();
+  return PropertiesService.getScriptProperties().getProperty(ADMIN_HASH_KEY_);
+}
+
+/** 合言葉がまだ決まっていないか。先生用タブが開いたときに最初に聞く。 */
+function getAdminSetupState() {
+  return { needsSetup: !storedAdminHash_(), minLength: ADMIN_PASSWORD_MIN_ };
+}
+
+/**
+ * いちばん最初の1回だけ。合言葉を決めて、そのまま先生として入る。
+ * すでに決まっているときは何もしない（あとから来た人が上書きできてはいけない）。
+ */
+function setupAdminPassword(newPass) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    if (storedAdminHash_()) {
+      return { success: false, message: 'すでにパスワードが設定されています。入力して入ってください。' };
+    }
+    if (!newPass || String(newPass).length < ADMIN_PASSWORD_MIN_) {
+      return { success: false, message: 'パスワードは' + ADMIN_PASSWORD_MIN_ + '文字以上にしてください。' };
+    }
+    PropertiesService.getScriptProperties().setProperty(ADMIN_HASH_KEY_, hashAdminPassword_(newPass));
+    return { success: true, token: issueAdminToken_(), message: 'パスワードを設定しました。' };
+  } finally { lock.releaseLock(); }
+}
+
+function checkAdminPassword(password) {
+  const stored = storedAdminHash_();
+  if (!stored) {
+    // まだ決まっていない。合言葉が無い状態で合鍵を出さない。
+    return { success: false, needsSetup: true };
+  }
+  if (stored === hashAdminPassword_(password)) {
     return { success: true, token: issueAdminToken_() };
   }
-  // 合言葉は初期値が 1234 の4桁で、画面から何度でも試せる。
-  // 締め出すと児童のいたずらで先生が入れなくなるので、代わりに1回ごとに待たせて
-  // 総当たりを割に合わなくする。本当の対策は合言葉を変えてもらうこと。
+  // 画面から何度でも試せる。締め出すと児童のいたずらで先生が入れなくなるので、
+  // 代わりに1回ごとに待たせて総当たりを割に合わなくする。
   Utilities.sleep(1000);
   return { success: false };
 }
@@ -287,14 +429,18 @@ function updateSettings(token, theme, status) {
 
 function changeAdminPassword(oldPass, newPass) {
   const props = PropertiesService.getScriptProperties();
-  if (oldPass !== props.getProperty('ADMIN_PASSWORD')) {
+  const stored = storedAdminHash_();
+  if (!stored) {
+    return { success: false, message: 'まだパスワードが設定されていません。' };
+  }
+  if (stored !== hashAdminPassword_(oldPass)) {
     Utilities.sleep(1000);
     return { success: false, message: '現在のパスワードが違います。' };
   }
-  if (!newPass || String(newPass).length < 4) {
-    return { success: false, message: 'あたらしいパスワードは4文字以上にしてください。' };
+  if (!newPass || String(newPass).length < ADMIN_PASSWORD_MIN_) {
+    return { success: false, message: 'あたらしいパスワードは' + ADMIN_PASSWORD_MIN_ + '文字以上にしてください。' };
   }
-  props.setProperty('ADMIN_PASSWORD', newPass);
+  props.setProperty(ADMIN_HASH_KEY_, hashAdminPassword_(newPass));
   return { success: true, message: 'パスワードを更新しました。' };
 }
 
@@ -352,7 +498,7 @@ function resetKukai(token) {
     });
 
     const s1 = ss.insertSheet('俳句', 1);
-    s1.appendRow(['ID', '名前', '投稿日時', '俳句', '上の句', '中の句', '下の句', '得点', '公開名', 'ミュート']);
+    s1.appendRow(['ID', '名前', '投稿日時', '俳句', '上の句', '中の句', '下の句', '得点', '公開名', 'ミュート', '投稿者ID']);
     
     const s2 = ss.insertSheet('コメント', 2);
     s2.appendRow(['投稿日時', '俳句ID', 'コメント投稿者', 'コメント']);
@@ -362,7 +508,7 @@ function resetKukai(token) {
 
     ss.getSheets().forEach(s => {
       if(s.getName() === '俳句' || s.getName() === 'コメント' || s.getName() === '投票') {
-        s.getRange('A1:J1').setBackground('#f3f4f6');
+        s.getRange('A1:K1').setBackground('#f3f4f6');
       }
     });
 
