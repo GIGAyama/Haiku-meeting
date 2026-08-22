@@ -5,7 +5,13 @@
   "description": "GIGA句会プラザ。GAS のウェブアプリ。ここにあるのは、配信する app.html / css.html / vendor.html を作るための道具。",
   "type": "module",
   "scripts": {
-    "build": "node tools/build.mjs"
+    "build": "node tools/build.mjs",
+    "gas:install": "npm install --no-save --no-package-lock --no-audit --no-fund @google/clasp@3.3.0",
+    "gas:login": "node scripts/gas-deploy.mjs login",
+    "gas:status": "node scripts/gas-deploy.mjs status",
+    "gas:backup": "node scripts/gas-deploy.mjs backup",
+    "gas:push": "node scripts/gas-deploy.mjs push",
+    "deploy": "node scripts/gas-deploy.mjs deploy"
   },
   "devDependencies": {
     "@babel/core": "7.29.7",
