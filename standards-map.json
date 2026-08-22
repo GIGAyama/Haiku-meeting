@@ -1,0 +1,12 @@
+{
+  "files": [
+    {
+      "canonical": "gas/gas-deploy.mjs",
+      "local": "scripts/gas-deploy.mjs"
+    },
+    {
+      "canonical": "gas/deploy.yml",
+      "local": ".github/workflows/deploy.yml"
+    }
+  ]
+}
