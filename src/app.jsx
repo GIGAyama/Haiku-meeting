@@ -18,7 +18,10 @@
               case 'getAdminDashboardData': return resolve({
                 haikus: [{ id: 1, author: 'GIGA太郎', haiku: 'さくらちる ランドセルには ゆめいっぱい', score: 3, isMuted: false }],
                 stats: { haikuCount: 24, authorCount: 20, commentsCount: 15, votesCount: 30 },
-                settings: { theme: '春の訪れ', votingStatus: '投票受付中' }
+                settings: { theme: '春の訪れ', votingStatus: '投票受付中' },
+                // シートの作りの所見。ふだんは空。ここに1件入れると、
+                // GAS の外でも警告の見た目を確かめられる。
+                sheetIssues: []
               });
               case 'getMyHaikus': return resolve([]);
               case 'getArchiveList': return resolve([]);
@@ -880,6 +883,31 @@
             <h2 className="text-3xl font-bold font-serif text-slate-800">管理ダッシュボード</h2>
             <button onClick={loadDashboard} disabled={isProcessing} className="tap-44 text-sm bg-white border border-slate-200 px-4 py-2 min-h-[44px] rounded-lg shadow-sm hover:bg-slate-50">↻ 最新の情報に更新</button>
           </div>
+
+          {/*
+            シートの列がずれていると、得点が別の列に入る・隠した句が広場に戻る・
+            締切時に実名がよその列へ入る、が画面に何も出ないまま起きる。
+            児童の画面は止めず、ここで先生にだけ知らせる。
+          */}
+          {dashData.sheetIssues && dashData.sheetIssues.length > 0 && (
+            <div role="alert" className="bg-amber-50 border-2 border-amber-500 rounded-2xl p-5">
+              <h3 className="font-bold text-amber-900 mb-2">⚠ スプレッドシートの作りが、アプリの想定と違います</h3>
+              <ul className="list-disc pl-5 space-y-1 text-sm text-amber-900">
+                {dashData.sheetIssues.map((f, i) => (
+                  <li key={i}><span className="font-bold">「{f.sheet}」{f.kind}</span>：{f.detail}</li>
+                ))}
+              </ul>
+              <p className="text-sm text-amber-900 mt-3">
+                得点・ミュート・作者名は<span className="font-bold">列の番号</span>で読み書きしています。
+                列を足したり順番を変えたりすると、画面に何も出ないまま結果がずれます。
+                もとの並びに戻してから「↻ 最新の情報に更新」を押してください。
+              </p>
+              <p className="text-sm text-amber-900 mt-1">
+                なお、この状態では<span className="font-bold">投票を締め切れません</span>。
+                作者名を別の列へ書き込んでしまうためです。
+              </p>
+            </div>
+          )}
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <StatCard label="参加児童数 (人)" value={dashData.stats.authorCount} max={40} color="bg-green-500" />

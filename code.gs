@@ -27,23 +27,132 @@ var SHEETS_ = [
  * 画面が TypeError で出なくなることは無くなる。
  */
 function ensureSheets_(ss) {
-  var missing = SHEETS_.filter(function (s) { return !ss.getSheetByName(s.name); });
-  if (!missing.length) return ss;
+  var todo = SHEETS_.filter(function (spec) {
+    var sheet = ss.getSheetByName(spec.name);
+    return !sheet || sheet.getLastRow() === 0;
+  });
+  if (!todo.length) return ss;
 
   var lock = LockService.getScriptLock();
   lock.waitLock(30000);
   try {
     SHEETS_.forEach(function (spec) {
-      if (ss.getSheetByName(spec.name)) return;   // ロック待ちの間に誰かが作っていた
-      var sheet = ss.insertSheet(spec.name);
-      sheet.appendRow(spec.header);
-      if (spec.firstRow) sheet.appendRow(spec.firstRow);
-      sheet.getRange('A1:K1').setBackground('#f3f4f6');
+      var sheet = ss.getSheetByName(spec.name);
+      if (sheet && sheet.getLastRow() > 0) return;   // ロック待ちの間に誰かが作っていた
+      if (!sheet) sheet = ss.insertSheet(spec.name);
+      writeHeader_(sheet, spec);
     });
   } finally {
     lock.releaseLock();
   }
   return ss;
+}
+
+/** 見出し行（と、設定シートの初期値）を書く。空のシートにしか使わない。 */
+function writeHeader_(sheet, spec) {
+  sheet.appendRow(spec.header);
+  if (spec.firstRow) sheet.appendRow(spec.firstRow);
+  sheet.getRange('A1:K1').setBackground('#f3f4f6');
+}
+
+/**
+ * シートの作りが SHEETS_ のとおりかを点検する。**直さない。**
+ *
+ * ⚠️ 見出しがずれていても、勝手に書き換えてはいけない。
+ *    ずれているのは中身のほうなので、見出しだけ正しくすると
+ *    **間違った列に正しいラベルが付き、事故が見えなくなる。**
+ *    直すのは人の仕事。ここは「どこがどうずれているか」を言うだけにする。
+ *
+ * なぜ要るか: このアプリは列を番号で読み書きしている（得点はH列、ミュートはJ列、
+ * 締切時の作者名はI列）。「俳句」シートの前に1列挿されるだけで、
+ * マイページに自分の句が出ない・隠した句が広場に戻る・得点が別の列に入る、が
+ * **画面に何も出ないまま**起きる。先生が誤字を直しにシートを開くのは想定内の操作なので、
+ * 起こりうるものとして扱う。
+ *
+ * @return {{sheet: string, kind: string, detail: string}[]} 見つかったもの。正常なら空。
+ */
+function checkSheets_(ss) {
+  var found = [];
+  SHEETS_.forEach(function (spec) {
+    var sheet = ss.getSheetByName(spec.name);
+    if (!sheet) {
+      found.push({ sheet: spec.name, kind: 'シートが無い', detail: '作り直せませんでした' });
+      return;
+    }
+    if (sheet.getLastRow() === 0) {
+      found.push({ sheet: spec.name, kind: '見出しが無い', detail: '1行目が空です' });
+      return;
+    }
+
+    var width = Math.max(spec.header.length, sheet.getLastColumn());
+    if (sheet.getMaxColumns) width = Math.min(width, sheet.getMaxColumns());
+    var actual = sheet.getRange(1, 1, 1, width).getValues()[0];
+    var cell = function (i) {
+      var v = actual[i];
+      return v === undefined || v === null ? '' : String(v).trim();
+    };
+
+    var wrong = [];
+    for (var i = 0; i < spec.header.length; i++) {
+      if (cell(i) !== spec.header[i]) wrong.push(i);
+    }
+    if (wrong.length) {
+      var at = wrong[0];
+      found.push({
+        sheet: spec.name,
+        kind: '見出しがちがう',
+        detail: (at + 1) + '列目が「' + spec.header[at] + '」のはずが「' + (cell(at) || '空') + '」になっています'
+          + (wrong.length > 1 ? '（ほか ' + (wrong.length - 1) + ' 列もずれています）' : ''),
+      });
+    }
+
+    var extra = [];
+    for (var j = spec.header.length; j < width; j++) {
+      if (cell(j) !== '') extra.push(cell(j));
+    }
+    if (extra.length) {
+      found.push({
+        sheet: spec.name,
+        kind: '列が多い',
+        detail: (spec.header.length + 1) + '列目から先に「' + extra.join('」「') + '」があります',
+      });
+    }
+  });
+  return found;
+}
+
+/**
+ * スプレッドシートを開いたときに出るメニュー。
+ * コンテナバインドのときだけ意味がある（独立スクリプトでは呼ばれない）。
+ */
+function onOpen(e) {
+  try {
+    SpreadsheetApp.getUi()
+      .createMenu('GIGA句会プラザ')
+      .addItem('シートを点検する', 'showSheetCheck')
+      .addToUi();
+  } catch (err) {
+    // ウェブアプリとして動いているときは画面が無い。何もしない。
+  }
+}
+
+/**
+ * 上のメニューから呼ぶ。所見を見せるだけで、何も書き換えない。
+ *
+ * ⚠️ google.script.run は末尾 `_` の無い関数を誰でも呼べるので、この関数も
+ *    児童から呼べる。**先に getUi() を取る**のはそのため。画面が無い文脈
+ *    （ウェブアプリ）ではここで例外になり、シートを1枚も読まずに終わる。
+ *    なお戻り値は無く、返すのは見出しの並びだけなので、児童の作品や名前は出ない。
+ */
+function showSheetCheck() {
+  var ui = SpreadsheetApp.getUi();   // 画面が無ければ、ここで止まる
+  var found = checkSheets_(getDbSpreadsheet());
+  var text = found.length
+    ? '次のところが、アプリの想定と違います。\n\n'
+      + found.map(function (f) { return '・「' + f.sheet + '」' + f.kind + '：' + f.detail; }).join('\n')
+      + '\n\n列の並びは変えないでください。得点・ミュート・作者名は列の番号で読み書きしています。'
+    : 'シートの作りは想定どおりです。';
+  ui.alert('シートの点検', text, ui.ButtonSet.OK);
 }
 
 /**
@@ -92,9 +201,7 @@ function getDbSpreadsheet() {
         // 残りを ensureSheets_ にそろえてもらう。
         const first = ss.getSheets()[0];
         first.setName(SHEETS_[0].name);
-        first.appendRow(SHEETS_[0].header);
-        first.appendRow(SHEETS_[0].firstRow);
-        first.getRange('A1:K1').setBackground('#f3f4f6');
+        writeHeader_(first, SHEETS_[0]);
         ensureSheets_(ss);
       }
     } catch (e) {
@@ -517,6 +624,22 @@ function updateSettings(token, theme, status) {
   requireAdmin_(token);
   try {
     const ss = getDbSpreadsheet();
+
+    // 締め切ると、B列（名前）を I列（公開名）へ書き戻して作者を明かす。
+    // 「俳句」シートの列がずれていると、**実名が別の列に入り、広場に流れる**。
+    // ここだけは進めずに止める。児童の画面はそのまま（投票受付中のまま）動く。
+    if (status === '投票締切') {
+      const issues = checkSheets_(ss).filter(function (f) { return f.sheet === '俳句'; });
+      if (issues.length) {
+        return {
+          success: false,
+          message: '「俳句」シートの列が想定と違うため、締め切りを中止しました。'
+            + issues[0].detail
+            + '　スプレッドシートの「GIGA句会プラザ」メニュー＞「シートを点検する」で確かめてください。',
+        };
+      }
+    }
+
     const settingsSheet = ss.getSheetByName('設定');
     const haikuSheet = ss.getSheetByName('俳句');
     settingsSheet.getRange('A2').setValue(safeCellText_(theme));
@@ -573,7 +696,9 @@ function getAdminDashboardData(token) {
   return {
     haikus: haikus.reverse(), // 新しいものを上に
     stats: { haikuCount: haikus.length, authorCount: authors.length, commentsCount, votesCount },
-    settings: settings
+    settings: settings,
+    // シートの作りが想定と違うとき、先生の画面に出す。児童の画面は止めない。
+    sheetIssues: checkSheets_(ss)
   };
 }
 

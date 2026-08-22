@@ -61,6 +61,10 @@ jobs:
       - name: 表計算ファイルの取り方（コピー配布と独立スクリプトの両方）
         run: npm run check:bound
 
+      # シートの列がずれたときに、気づけるか・勝手に直していないか。
+      - name: シートの作りの点検
+        run: npm run check:shape
+
   # 正本（GIGAyama.github.io/standards/）からコピーしたファイルが、
   # 正本の更新に取り残されていないかを見る。standards-map.json が対応表。
   drift:
