@@ -50,6 +50,28 @@ const loadFiles = () => {
 const get = (files, p) => files.get(p)?.clean ?? '';
 
 /**
+ * `名前(` で始まる呼び出しの、括弧の中身をぜんぶ取り出す。
+ * 引数の中にさらに括弧が入る（safeCellText_(authorId || '') など）ので、
+ * 正規表現ひとつでは取り切れない。深さを数えて閉じ括弧を探す。
+ */
+const callArgs = (src, fnName) => {
+  const found = [];
+  const re = new RegExp(`\\b${fnName}\\s*\\(`, 'g');
+  let m;
+  while ((m = re.exec(src))) {
+    const open = m.index + m[0].length - 1;
+    let depth = 0, i = open;
+    for (; i < src.length; i++) {
+      if (src[i] === '(') depth++;
+      else if (src[i] === ')') { depth--; if (depth === 0) break; }
+    }
+    if (depth !== 0) continue;      // 閉じていない＝読み取れていないので数えない
+    found.push(src.slice(open + 1, i));
+  }
+  return found;
+};
+
+/**
  * 規則。
  *   check(files) … { ok, detail } を返す
  *   break(files) … わざと壊す（--self-test 用）。壊したあと check が落ちなければ検査が甘い。
@@ -165,6 +187,34 @@ const RULES = [
     },
     break: (files) => {
       files.get('code.gs').clean = get(files, 'code.gs').replace(/function resetKukai\(token\) \{\n  requireAdmin_\(token\);/, 'function resetKukai(token) {');
+    },
+  },
+  {
+    id: '児童の入力をセルに書く前に無害化している',
+    why: '= + - @ で始まる句を先生が表計算で開くと、その場で学級のデータが外へ出る',
+    check: (files) => {
+      const gs = get(files, 'code.gs');
+      const fn = CONFIG['無害化関数'];
+      const bad = [];
+      if (!new RegExp(`function\\s+${fn}\\s*\\(`).test(gs)) bad.push(`${fn}() が無い`);
+
+      const writes = [...callArgs(gs, 'appendRow'), ...callArgs(gs, 'setValue')];
+      for (const args of writes) {
+        // 無害化を通しているところは、いったん取り除いてから見る。
+        // 残ったところに児童の入力の名前があれば、それは素通しで書いている。
+        let rest = args;
+        for (const wrapped of callArgs(args, fn)) rest = rest.replace(`${fn}(${wrapped})`, '');
+        for (const v of CONFIG['無害化する値']) {
+          if (new RegExp(`\\b${v}\\b`).test(rest) && !bad.includes(v)) bad.push(v);
+        }
+      }
+      return {
+        ok: bad.length === 0,
+        detail: bad.length ? `素通し: ${bad.join(', ')}` : `セルへの書き込み ${writes.length} か所すべてが ${fn}() を通している`,
+      };
+    },
+    break: (files) => {
+      files.get('code.gs').clean = get(files, 'code.gs').replace('safeCellText_(comment)', 'comment');
     },
   },
   {

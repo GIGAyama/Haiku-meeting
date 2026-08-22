@@ -23,26 +23,35 @@ jobs:
       - name: 生成物を作り直す
         run: npm run build
 
+      # 以下の検査の中身は package.json の check:* に置いてある。
+      # main へのマージで走る Deploy も同じ package.json の check を通るので、
+      # ここに検査そのものを直接書くと「CI では見ているのに、本番反映では
+      # 見ていない」検査ができてしまう。名前だけを呼ぶ。
+      #
       # このリポジトリでいちばん起きやすい事故。
       # src/app.jsx を直したのに npm run build を忘れると、変更が画面に出ない。
       # 生成物は配信されるファイルそのものなので、ここで差分が出たら止める。
       - name: 生成物が原本と一致しているか（build の忘れを止める）
         run: |
-          if ! git diff --exit-code --stat app.html css.html vendor.html; then
+          if ! npm run --silent check:built; then
             echo "::error::src/app.jsx や tools/extra.css を直したあと npm run build を走らせていません。"
             echo "手元で npm run build を実行し、app.html / css.html / vendor.html も一緒にコミットしてください。"
             exit 1
           fi
 
       - name: 品質ゲート
-        run: node scripts/check-project.mjs
+        run: npm run check:gate
 
       # 「0件でした」だけでは、検査が動いているのか何も見ていないのか区別できない。
       - name: 品質ゲート自体を、わざと壊して確かめる
-        run: node scripts/check-project.mjs --self-test
+        run: npm run check:self-test
 
       - name: 管理者APIの認可（合鍵なしで弾かれるか）
-        run: node tests/gas-admin-auth.test.mjs
+        run: npm run check:admin
+
+      # 児童の書いた文字が、先生の表計算のなかで数式として動き出さないか。
+      - name: 表計算に数式として書かれないか
+        run: npm run check:cell
 
   # 正本（GIGAyama.github.io/standards/）からコピーしたファイルが、
   # 正本の更新に取り残されていないかを見る。standards-map.json が対応表。

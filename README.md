@@ -167,8 +167,7 @@ GAS は拡張子を自動で付けるので、**名前は拡張子なしで入�
 ```bash
 npm ci                              # 版は package-lock.json で固定
 npm run build                       # app.html / css.html / vendor.html を作り直す
-node scripts/check-project.mjs      # 品質ゲート
-node tests/gas-admin-auth.test.mjs  # 管理者APIの認可
+npm run check                       # 下の検査を、CI と同じ順で全部まわす
 ```
 
 | ファイル | 中身 | 編集してよいか |
@@ -191,9 +190,18 @@ node tests/gas-admin-auth.test.mjs  # 管理者APIの認可
 
 | コマンド | 何を見るか |
 |---|---|
-| `node scripts/check-project.mjs` | CDN依存・拡大禁止・`100vh`・ふりがなの色・管理者APIの認可など12項目 |
-| `node scripts/check-project.mjs --self-test` | **検査そのものを、わざと壊して落ちることを確かめる** |
-| `node tests/gas-admin-auth.test.mjs` | 合鍵なしで管理者APIが弾かれるか |
+| `npm run check` | 下の全部を、CI と同じ順でまわす |
+| `npm run check:built` | 生成物が原本と一致しているか（`npm run build` の忘れ） |
+| `npm run check:gate` | CDN依存・拡大禁止・`100vh`・ふりがなの色・管理者APIの認可など13項目 |
+| `npm run check:self-test` | **検査そのものを、わざと壊して落ちることを確かめる** |
+| `npm run check:admin` | 合鍵なしで管理者APIが弾かれるか |
+| `npm run check:cell` | 児童の書いた文字が、表計算のなかで数式として動き出さないか |
+
+> **`npm run check` という名前は変えないでください。** `main` にマージしたときに走る
+> Deploy（`.github/workflows/deploy.yml`）は、`package.json` の
+> `quality` / `ci` / `check` を順に探して**見つかった1つだけ**を実行します。
+> どれも無いと「飛ばします」と表示して、**検査を1つも通さないまま本番の
+> Apps Script へ push します**（この3つが無い状態が、実際にそうなっていました）。
 
 `--self-test` があるのは、「0件でした」だけでは検査が動いているのか
 何も見ていないのか区別できないためです。実際、この仕組みを作る過程で

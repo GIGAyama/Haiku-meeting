@@ -12,6 +12,10 @@
   "_管理者API": "サーバー側で requireAdmin_ を通さなければならない関数。ここに足すと検査対象になる。",
   "管理者API": ["updateSettings", "toggleMuteHaiku", "resetKukai", "getAdminDashboardData"],
 
+  "_セルに書く前の無害化": "= + - @ で始まる文字列は、表計算では数式になる。児童の書いた文字をそのままセルに書くと、先生がファイルを開いた瞬間に外部へ通信しうる。ここに並べた値は、code.gs の中で appendRow / setValue に渡す前に無害化関数を通していなければならない。",
+  "無害化関数": "safeCellText_",
+  "無害化する値": ["name", "line1", "line2", "line3", "haikuText", "comment", "commenterName", "theme", "voterId", "authorId"],
+
   "_CDN": "実行コードを外から取ってはいけない。学校のフィルタリングで塞がれると画面が出ない。",
   "禁止するCDN": [
     "cdn.tailwindcss.com",
