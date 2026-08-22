@@ -18,9 +18,25 @@
  *   書いてある。素朴に grep すると **その説明文に反応して**「CDN を使っている」と
  *   誤検知する。実際そうなった。判定の前にコメントを落とす。
  *
- * 正本（Digital_textbook の scripts/lib/project-quality.mjs）は作業環境から
- * 取得できなかったため、ここでは自前で書いている。正本が使えるようになったら
- * 差し替えられるよう、規則は RULES 配列に閉じてある。
+ * ここにはかつて「正本（Digital_textbook の scripts/lib/project-quality.mjs）は
+ * 作業環境から取得できなかったため自前で書いている。正本が使えるようになったら
+ * 差し替える」と書いてあった。その計画は取りやめた（2026-08-22 に艦隊を実測）:
+ *
+ *   ・あの正本は8本にコピーがあるが 3世代に割れており（297行が6本・
+ *     158行が1本・64行が1本）、export する名前もばらばら
+ *     （runQualityChecks / run / 該当なし）。差し替えで受けられる形に
+ *     なっていない。
+ *   ・任意参照していた5本では、コピーを置いても検査が1件も増えないか、
+ *     例外で落ちるかのどちらかだった。
+ *
+ * 共通化は、ひとつの大きな正本ではなく用件ごとの小さな正本で進める。
+ * いま GIGAyama.github.io/standards/ にあるのは
+ *   standards/lib/giga-v5-checks.mjs … Part I の検査
+ *   standards/lib/check-secrets.mjs  … 秘密の直書き
+ * の2つで、どちらも丸ごと1ファイルで完結し、無ければコマンドごと失敗する。
+ *
+ * 規則を RULES 配列に閉じてあること自体は、そのまま値打ちがある
+ * （どの規則があるかが1か所で読める）ので変えていない。
  */
 import { readFileSync, existsSync, statSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
