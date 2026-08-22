@@ -73,9 +73,12 @@ README.md ではなく、コードと実測から取っています。
 | 画面は5つ | `src/app.jsx` の NavButton が5つ（投稿・広場・自分・過去・先生） |
 | 貼り付けるファイルは全部で5つ | `code.gs` ＋ HTML 4つ（index / app / css / vendor） |
 | vendor は157キロバイトほど | 実測 160,271 バイト（156.5 KB） |
-| 最初に読み込む量はあわせて250キロバイトほど | 実測 index 1.2 ＋ vendor 156.5 ＋ css 32.3 ＋ app 60.0 = 250.0 KB |
+| 最初に読み込む量はあわせて256キロバイトほど | 実測 index 1.2 ＋ vendor 156.5 ＋ css 32.4 ＋ app 65.8 = 255.9 KB（2026-08-22 に測り直した） |
 | 金3点・銀2点・銅1点、1人3票 | `src/app.jsx` の HaikuModal と `code.gs` の submitVote（サーバー側でも二重投票を弾いている） |
 | 同点は並記、0点は賞に入らない | `src/app.jsx` の ResultsArea |
+| 自分の句への投票を止めているのは画面側だけ | `code.gs` の getPlazaData のコメント（「自己申告なので、これで守られるのは事故だけ」）と MANUAL.md の一覧 |
+| 同じ賞・同じ句への二重投票はサーバー側で弾く | `code.gs` の submitVote |
+| アクセスできるユーザーは「同一ドメインの全員」をすすめる | README.md の「3. デプロイ（公開）する」 |
 | 初期の合言葉は無く、最初に開いた先生が決める | `code.gs` の setupAdminPassword / getAdminSetupState |
 | 提示モードは1.5倍 | `tools/extra.css` の `:root.presentation { font-size: 150% }` |
 | 印刷はA4の縦 | `tools/extra.css` の `@page { size: A4 portrait }` |
@@ -83,14 +86,14 @@ README.md ではなく、コードと実測から取っています。
 | プレビューは画面の広い端末だけ | `src/app.jsx` の `hidden md:flex`（768px 以上） |
 | 通すドメイン | 配信されるファイル全部から外部URLを拾った結果。script.google.com（本体）、fonts.googleapis.com と fonts.gstatic.com（書体）、drive.google.com（`code.gs` の setFaviconUrl が読むタブの絵） |
 
-### 見つかったずれ（記事とは別件。直すかどうかは書き手の判断で）
+### 見つかったずれ（2026-08-08 に記録。2026-08-22 に始末をつけた）
 
-- `README.md` の貼り付けファイルの表にある大きさが、実測とずれています。
-  app は 52 KB とありますが実測 60.0 KB、css は 28 KB とありますが実測 32.3 KB です。
-  vendor の 157 KB と index の 1 KB は合っています。
-- `AUDIT.md` と `README.md` にある「237KB」も、いまの実測では 250 KB です。
-  `scripts/check-project.mjs` が出す「初回JS 217KB」は JavaScript だけを数えた値なので、別の数字です。
-- 記事には実測値のほうを書いてあります。
+- `README.md` の貼り付けファイルの表にある大きさが実測とずれていた件は、**直しました**
+  （app 52 KB → 66 KB、css 28 KB → 32 KB。index の 1 KB と vendor の 157 KB は合っていました）。
+- `AUDIT.md` の「237KB」は 2026-08-03 の記録なので、そのままにしてあります。
+  当時の測定値であって、いまの値ではありません。
+- `scripts/check-project.mjs` が出す「初回JS」は JavaScript だけを数えた値です
+  （2026-08-22 の実測で 222 KB）。記事の「最初に読み込む量」は CSS と外枠も足した 256 KB で、別の数字です。
 
 ## 5. 撮り直すときの手順
 
@@ -127,7 +130,7 @@ README.md ではなく、コードと実測から取っています。
   端末に残る保存領域は「その端末に覚えられて」と言いかえた
 - 絵文字は見出しだけ
 - 子どものことは「子どもたち」、読み手は「先生」「先生方」
-- 本文の字数は約 7,600 字（画像の行を除く）
+- 本文の字数は約 7,800 字（画像の行を除く。`grep -v '^!\[' … | wc -m` 相当で 7,758 字）
 
 見出しは基本の6本に、目玉として2本（🥇 と 🖥）を 📱 と ✨ のあいだに足しています。
 
