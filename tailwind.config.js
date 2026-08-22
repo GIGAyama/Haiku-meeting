@@ -6,7 +6,7 @@
  * ここで同じ設定を持ち、使っているクラスだけの CSS を先に作る。
  */
 export default {
-    content: ['./index.html', './src/**/*.{js,jsx}'],
+    content: ['./app-shell.html', './src/**/*.{js,jsx}'],
     theme: {
         extend: {
             animation: {

@@ -1,8 +1,9 @@
 {
   "_説明": "scripts/check-project.mjs が読む設定。しきい値と、見に行くファイルをここに置く。",
 
-  "配信ファイル": ["index.html", "app.html", "css.html", "vendor.html"],
-  "原本": ["src/app.jsx", "tools/extra.css", "tailwind.config.js", "code.gs", "index.html"],
+  "_配信ファイル": "児童のブラウザに届くもの。index.html はサイトのトップに置く導入案内で、GAS には送らない（.claspignore）。アプリの外枠は app-shell.html。",
+  "配信ファイル": ["index.html", "app-shell.html", "app.html", "css.html", "vendor.html"],
+  "原本": ["src/app.jsx", "tools/extra.css", "tailwind.config.js", "code.gs", "app-shell.html", "index.html"],
   "生成物": ["app.html", "css.html", "vendor.html"],
 
   "1ファイルの上限KB": 400,

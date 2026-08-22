@@ -9,6 +9,10 @@
 # 戻します**。.html は GAS が読むものだけを名指しで戻しています
 # （*.html にすると privacy.html などまで送られるため）。
 #
+# index.html（サイトのトップに置く導入案内）は GAS では使わないので送りません。
+# アプリの外枠は app-shell.html です。もとは index.html でしたが、それだと
+# GitHub Pages が GAS 用のテンプレートをそのまま配って白い画面になります。
+#
 # .gs を足したときは何もしなくても送られます。.html を足したときは
 # ここに1行足してください。npm run gas:status で確かめられます。
 **/**
@@ -16,5 +20,5 @@
 !*.gs
 !app.html
 !css.html
-!index.html
+!app-shell.html
 !vendor.html

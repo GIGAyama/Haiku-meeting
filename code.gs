@@ -53,22 +53,47 @@ function getDbSpreadsheet() {
 }
 
 /**
- * ほかの .html ファイルを index.html に差し込む。
+ * ほかの .html ファイルを外枠（app-shell）に差し込む。
  * GAS は .gs と .html しか置けないので、CSS も JavaScript も .html に包んで持つ。
  */
 function include(filename) {
   return HtmlService.createHtmlOutputFromFile(filename).getContent();
 }
 
+/**
+ * 外枠のファイル名。
+ *
+ * リポジトリでは app-shell.html という名前で持っている。もとは index.html
+ * だったが、それだと GitHub Pages（haiku-meeting.giga-school.com）が
+ * **GAS 用のテンプレートをそのまま配ってしまい、白い画面になる**。
+ * `<?!= include('app'); ?>` はブラウザには意味が無く、ただ捨てられるためである。
+ * いまトップに置いてあるのは導入案内のページで、そちらが index.html。
+ *
+ * ⚠️ 前の版を貼り付けた学級では、GAS 側のファイル名がまだ `index` のままである。
+ *    名前を変えただけで動かなくなると、授業中に画面が出なくなる。
+ *    新しい名前を先に探し、無ければ前の名前に落ちる。
+ */
+var SHELL_FILE_ = 'app-shell';
+var SHELL_FILE_LEGACY_ = 'index';
+
+function shellTemplate_() {
+  try {
+    return HtmlService.createTemplateFromFile(SHELL_FILE_);
+  } catch (e) {
+    // 貼り付けた版が古く app-shell が無い。前の名前で開く。
+    return HtmlService.createTemplateFromFile(SHELL_FILE_LEGACY_);
+  }
+}
+
 function doGet(e) {
   getDbSpreadsheet();
-  const template = HtmlService.createTemplateFromFile('index');
+  const template = shellTemplate_();
   return template.evaluate()
     .setTitle('GIGA句会プラザ')
     // 拡大は禁止しない。maximum-scale=1.0 と user-scalable=no を入れると、
     // 見えづらい子が画面を大きくできなくなる。
     // viewport-fit=cover は、切り欠きのある端末で安全領域を CSS から使うために要る。
-    // GAS は画面を iframe で包むため、index.html の <meta> だけでは足りず、ここにも要る。
+    // GAS は画面を iframe で包むため、app-shell.html の <meta> だけでは足りず、ここにも要る。
     .addMetaTag('viewport', 'width=device-width, initial-scale=1.0, viewport-fit=cover')
     .setFaviconUrl('https://drive.google.com/uc?id=14xzbLO7mLg2hy85PBQNnj0lir-gi2Uky.&png');
 }

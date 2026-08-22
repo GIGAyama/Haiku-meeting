@@ -71,9 +71,9 @@ README.md ではなく、コードと実測から取っています。
 | 記事の記述 | 出どころ |
 |---|---|
 | 画面は5つ | `src/app.jsx` の NavButton が5つ（投稿・広場・自分・過去・先生） |
-| 貼り付けるファイルは全部で5つ | `code.gs` ＋ HTML 4つ（index / app / css / vendor） |
+| 貼り付けるファイルは全部で5つ | `code.gs` ＋ HTML 4つ（app-shell / app / css / vendor）。外枠はもと `index` で、2026-08-22 に改名 |
 | vendor は157キロバイトほど | 実測 160,271 バイト（156.5 KB） |
-| 最初に読み込む量はあわせて256キロバイトほど | 実測 index 1.2 ＋ vendor 156.5 ＋ css 32.4 ＋ app 65.8 = 255.9 KB（2026-08-22 に測り直した） |
+| 最初に読み込む量はあわせて256キロバイトほど | 実測 app-shell 1.2 ＋ vendor 156.5 ＋ css 32.4 ＋ app 65.8 = 255.9 KB（2026-08-22 に測り直した） |
 | 金3点・銀2点・銅1点、1人3票 | `src/app.jsx` の HaikuModal と `code.gs` の submitVote（サーバー側でも二重投票を弾いている） |
 | 同点は並記、0点は賞に入らない | `src/app.jsx` の ResultsArea |
 | 自分の句への投票を止めているのは画面側だけ | `code.gs` の getPlazaData のコメント（「自己申告なので、これで守られるのは事故だけ」）と MANUAL.md の一覧 |
@@ -89,7 +89,7 @@ README.md ではなく、コードと実測から取っています。
 ### 見つかったずれ（2026-08-08 に記録。2026-08-22 に始末をつけた）
 
 - `README.md` の貼り付けファイルの表にある大きさが実測とずれていた件は、**直しました**
-  （app 52 KB → 66 KB、css 28 KB → 32 KB。index の 1 KB と vendor の 157 KB は合っていました）。
+  （app 52 KB → 66 KB、css 28 KB → 32 KB。外枠の 1 KB と vendor の 157 KB は合っていました）。
 - `AUDIT.md` の「237KB」は 2026-08-03 の記録なので、そのままにしてあります。
   当時の測定値であって、いまの値ではありません。
 - `scripts/check-project.mjs` が出す「初回JS」は JavaScript だけを数えた値です
@@ -101,7 +101,7 @@ README.md ではなく、コードと実測から取っています。
 実データを触れません。撮影のときは、次の形で本物の画面を動かしました。
 
 1. `npm i --no-save playwright` を入れる（`package.json` には残さない）。
-2. `index.html` の `<?!= include('…') ?>` を、`vendor.html` `css.html` `app.html` の中身に
+2. `app-shell.html`（撮影当時は `index.html`）の `<?!= include('…') ?>` を、`vendor.html` `css.html` `app.html` の中身に
    置きかえた1枚の HTML を作る。画面（`app.html`）と処理（`code.gs`）はリポジトリのものをそのまま使う。
 3. その HTML の中で、GAS のサービス（SpreadsheetApp / PropertiesService / CacheService /
    LockService / Utilities）を、その場かぎりの入れ物として用意する。

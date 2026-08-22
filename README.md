@@ -90,8 +90,12 @@ Google アカウントさえあれば、サーバー代も外部サービスの�
 事前の準備は Google アカウントだけです。
 
 > ⚠️ **貼り付けるファイルは5つあります。**
-> `index.html` は残りの3つ（`app` / `css` / `vendor`）を読み込む造りなので、
+> `app-shell.html` は残りの3つ（`app` / `css` / `vendor`）を読み込む造りなので、
 > **1つでも欠けると画面が真っ白になります。** 名前も下表のとおり正確に付けてください。
+>
+> **以前の版では、この外枠の名前は `index` でした。** すでに `index` で貼って
+> お使いの学級は、そのままで動きます（`code.gs` が `app-shell` を先に探し、
+> 無ければ `index` に落ちます）。貼り直すときに `app-shell` へ変えてください。
 
 ### 1. プロジェクトを作る
 
@@ -105,7 +109,7 @@ GAS は拡張子を自動で付けるので、**名前は拡張子なしで入�
 
 | GAS で付ける名前 | 貼り付ける中身 | 大きさ |
 |---|---|---:|
-| `index` | `index.html` | 1 KB |
+| `app-shell` | `app-shell.html` | 1 KB |
 | `app`   | `app.html`   | 66 KB |
 | `css`   | `css.html`   | 32 KB |
 | `vendor`| `vendor.html`| 157 KB |
@@ -177,7 +181,8 @@ npm run check                       # 下の検査を、CI と同じ順で全部
 |---|---|---|
 | `src/app.jsx` | 画面本体（JSX） | **ここを直す** |
 | `code.gs` | サーバー側の処理 | ここを直す |
-| `index.html` | 外枠。`include()` で3つを読む | ここを直す |
+| `app-shell.html` | アプリの外枠。`include()` で3つを読む | ここを直す |
+| `index.html` | サイトのトップに出す導入案内。GAS には送らない | ここを直す |
 | `tools/extra.css` | Tailwind に無い追加のスタイル | ここを直す |
 | `tailwind.config.js` | Tailwind の設定 | ここを直す |
 | `app.html` / `css.html` / `vendor.html` | 生成物 | **手で編集しない** |
@@ -199,6 +204,7 @@ npm run check                       # 下の検査を、CI と同じ順で全部
 | `npm run check:self-test` | **検査そのものを、わざと壊して落ちることを確かめる** |
 | `npm run check:admin` | 合鍵なしで管理者APIが弾かれるか |
 | `npm run check:cell` | 児童の書いた文字が、表計算のなかで数式として動き出さないか |
+| `npm run check:shell` | 外枠（`app-shell`）の読み分け。前の版を貼ったままの学級でも画面が出るか |
 
 > **`npm run check` という名前は変えないでください。** `main` にマージしたときに走る
 > Deploy（`.github/workflows/deploy.yml`）は、`package.json` の

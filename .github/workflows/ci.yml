@@ -53,6 +53,10 @@ jobs:
       - name: 表計算に数式として書かれないか
         run: npm run check:cell
 
+      # 外枠のファイル名。前の版を貼ったままの学級でも画面が出るか。
+      - name: 外枠（app-shell）の読み分け
+        run: npm run check:shell
+
   # 正本（GIGAyama.github.io/standards/）からコピーしたファイルが、
   # 正本の更新に取り残されていないかを見る。standards-map.json が対応表。
   drift:
