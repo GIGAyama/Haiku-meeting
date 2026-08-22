@@ -14,7 +14,7 @@
  *
  * ■ コメントを落としてから判定する
  *
- *   このリポジトリの index.html には、CDN をやめた経緯が日本語のコメントで
+ *   このリポジトリの app-shell.html には、CDN をやめた経緯が日本語のコメントで
  *   書いてある。素朴に grep すると **その説明文に反応して**「CDN を使っている」と
  *   誤検知する。実際そうなった。判定の前にコメントを落とす。
  *
@@ -50,6 +50,28 @@ const loadFiles = () => {
 const get = (files, p) => files.get(p)?.clean ?? '';
 
 /**
+ * `名前(` で始まる呼び出しの、括弧の中身をぜんぶ取り出す。
+ * 引数の中にさらに括弧が入る（safeCellText_(authorId || '') など）ので、
+ * 正規表現ひとつでは取り切れない。深さを数えて閉じ括弧を探す。
+ */
+const callArgs = (src, fnName) => {
+  const found = [];
+  const re = new RegExp(`\\b${fnName}\\s*\\(`, 'g');
+  let m;
+  while ((m = re.exec(src))) {
+    const open = m.index + m[0].length - 1;
+    let depth = 0, i = open;
+    for (; i < src.length; i++) {
+      if (src[i] === '(') depth++;
+      else if (src[i] === ')') { depth--; if (depth === 0) break; }
+    }
+    if (depth !== 0) continue;      // 閉じていない＝読み取れていないので数えない
+    found.push(src.slice(open + 1, i));
+  }
+  return found;
+};
+
+/**
  * 規則。
  *   check(files) … { ok, detail } を返す
  *   break(files) … わざと壊す（--self-test 用）。壊したあと check が落ちなければ検査が甘い。
@@ -68,7 +90,7 @@ const RULES = [
       return { ok: hits.length === 0, detail: hits.length ? hits.join(' / ') : '0 バイト' };
     },
     break: (files) => {
-      const f = files.get('index.html');
+      const f = files.get('app-shell.html');
       f.clean += '\n<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>';
     },
   },
@@ -76,19 +98,46 @@ const RULES = [
     id: '拡大を禁止していない',
     why: '見えづらい子が画面を大きくできなくなる',
     check: (files) => {
-      const hits = ['index.html', 'code.gs'].filter(p => /user-scalable\s*=\s*no|maximum-scale/.test(get(files, p)));
+      const hits = ['app-shell.html', 'index.html', 'code.gs'].filter(p => /user-scalable\s*=\s*no|maximum-scale/.test(get(files, p)));
       return { ok: hits.length === 0, detail: hits.length ? hits.join(', ') + ' に指定あり' : '指定なし' };
     },
     break: (files) => { files.get('code.gs').clean += "\n.addMetaTag('viewport','width=device-width, user-scalable=no')"; },
   },
   {
-    id: 'viewport-fit=cover が index.html と code.gs の両方にある',
+    id: 'viewport-fit=cover が app-shell.html と code.gs の両方にある',
     why: 'GAS は画面を iframe で包むため、片方だけでは安全領域が使えない',
     check: (files) => {
-      const missing = ['index.html', 'code.gs'].filter(p => !get(files, p).includes('viewport-fit=cover'));
+      const missing = ['app-shell.html', 'code.gs'].filter(p => !get(files, p).includes('viewport-fit=cover'));
       return { ok: missing.length === 0, detail: missing.length ? `${missing.join(', ')} に無い` : '両方にあり' };
     },
     break: (files) => { files.get('code.gs').clean = get(files, 'code.gs').replace(/viewport-fit=cover/g, ''); },
+  },
+  {
+    id: 'サイトのトップが GAS のテンプレートのままではない',
+    why: 'GitHub Pages がそれをそのまま配ると、白い画面だけが出る',
+    // 実際にそうなっていた。`<?!= include('app'); ?>` はブラウザには意味が無く、
+    // 黙って捨てられる。エラーも出ないので、開いた人には理由が分からない。
+    check: (files) => {
+      // 「無い」を緑にしない。消えていても Pages は 404 を返すだけで、
+      // ここが素通りすると誰も気づけない。
+      if (!files.has('index.html')) return { ok: false, detail: 'index.html が無い' };
+      const bad = /<\?/.test(get(files, 'index.html'));
+      return { ok: !bad, detail: bad ? 'index.html に GAS のテンプレート記法がある' : '導入案内のページになっている' };
+    },
+    break: (files) => { files.get('index.html').clean += "\n<?!= include('app'); ?>"; },
+  },
+  {
+    id: 'code.gs が読む外枠のファイルがある',
+    why: '名前がずれると、開いた瞬間に「ファイルが見つかりません」だけが出る',
+    check: (files) => {
+      const m = /SHELL_FILE_\s*=\s*'([^']+)'/.exec(get(files, 'code.gs'));
+      if (!m) return { ok: false, detail: 'code.gs に SHELL_FILE_ が無い' };
+      const wanted = m[1] + '.html';
+      return { ok: files.has(wanted), detail: files.has(wanted) ? `${wanted} を読んでいる` : `${wanted} がリポジトリに無い` };
+    },
+    break: (files) => {
+      files.get('code.gs').clean = get(files, 'code.gs').replace(/SHELL_FILE_\s*=\s*'[^']+'/, "SHELL_FILE_ = 'nope'");
+    },
   },
   {
     id: '100vh を単独で使っていない',
@@ -165,6 +214,34 @@ const RULES = [
     },
     break: (files) => {
       files.get('code.gs').clean = get(files, 'code.gs').replace(/function resetKukai\(token\) \{\n  requireAdmin_\(token\);/, 'function resetKukai(token) {');
+    },
+  },
+  {
+    id: '児童の入力をセルに書く前に無害化している',
+    why: '= + - @ で始まる句を先生が表計算で開くと、その場で学級のデータが外へ出る',
+    check: (files) => {
+      const gs = get(files, 'code.gs');
+      const fn = CONFIG['無害化関数'];
+      const bad = [];
+      if (!new RegExp(`function\\s+${fn}\\s*\\(`).test(gs)) bad.push(`${fn}() が無い`);
+
+      const writes = [...callArgs(gs, 'appendRow'), ...callArgs(gs, 'setValue')];
+      for (const args of writes) {
+        // 無害化を通しているところは、いったん取り除いてから見る。
+        // 残ったところに児童の入力の名前があれば、それは素通しで書いている。
+        let rest = args;
+        for (const wrapped of callArgs(args, fn)) rest = rest.replace(`${fn}(${wrapped})`, '');
+        for (const v of CONFIG['無害化する値']) {
+          if (new RegExp(`\\b${v}\\b`).test(rest) && !bad.includes(v)) bad.push(v);
+        }
+      }
+      return {
+        ok: bad.length === 0,
+        detail: bad.length ? `素通し: ${bad.join(', ')}` : `セルへの書き込み ${writes.length} か所すべてが ${fn}() を通している`,
+      };
+    },
+    break: (files) => {
+      files.get('code.gs').clean = get(files, 'code.gs').replace('safeCellText_(comment)', 'comment');
     },
   },
   {

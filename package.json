@@ -6,6 +6,13 @@
   "type": "module",
   "scripts": {
     "build": "node tools/build.mjs",
+    "check": "npm run build && npm run check:built && npm run check:gate && npm run check:self-test && npm run check:admin && npm run check:cell && npm run check:shell",
+    "check:built": "git diff --exit-code --stat app.html css.html vendor.html",
+    "check:gate": "node scripts/check-project.mjs",
+    "check:self-test": "node scripts/check-project.mjs --self-test",
+    "check:admin": "node tests/gas-admin-auth.test.mjs",
+    "check:cell": "node tests/gas-sheet-injection.test.mjs",
+    "check:shell": "node tests/gas-shell-template.test.mjs",
     "gas:install": "npm install --no-save --no-package-lock --no-audit --no-fund @google/clasp@3.3.0",
     "gas:login": "node scripts/gas-deploy.mjs login",
     "gas:status": "node scripts/gas-deploy.mjs status",

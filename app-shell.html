@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>GIGA句会プラザ</title>
+  <!--
+    viewport は code.gs の addMetaTag でも指定している（GAS は画面を iframe で
+    包むため、外枠側にも要る）。拡大は禁止しない。
+  -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+
+  <!--
+    React・Tailwind・紙吹雪は、CDN ではなく GAS 側に置いてある。
+    以前は cdn.tailwindcss.com と unpkg から読み、さらに @babel/standalone で
+    JSX をブラウザの中でコンパイルしていた。学校のフィルタリングでこれらが
+    塞がれると **画面がまったく出ない**（白いまま何も起きない）。
+    先に作っておけば、その事故は起きない。作り方は tools/build.mjs にある。
+  -->
+  <?!= include('vendor'); ?>
+  <?!= include('css'); ?>
+
+  <!-- 和風フォント。届かなくても字が崩れないよう、後ろに端末側の明朝体を並べてある -->
+  <link href="https://fonts.googleapis.com/css2?family=Yuji+Syuku&display=swap" rel="stylesheet">
+  
+</head>
+<body>
+  <div id="root"></div>
+
+  <?!= include('app'); ?>
+
+</body>
+</html>

