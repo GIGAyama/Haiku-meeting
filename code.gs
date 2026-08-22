@@ -4,7 +4,71 @@
  * =========================================================================
  */
 
+/**
+ * このアプリが使うシートの並び。名前と、新しく作ったときに置く見出し行。
+ * ここに足すと、コピーで配ったファイルにも自動でそろう。
+ */
+var SHEETS_ = [
+  { name: '設定',     header: ['お題', '投票状況'], firstRow: ['自由律', '投票受付中'] },
+  // J列（10列目）に非表示(ミュート)フラグを隠しデータとして持ちます
+  // K列（11列目）は投稿した端末の識別子。マイページで「自分の作品だけ」を
+  // 返すときに突き合わせます。児童には見せません。
+  { name: '俳句',     header: ['ID', '名前', '投稿日時', '俳句', '上の句', '中の句', '下の句', '得点', '公開名', 'ミュート', '投稿者ID'] },
+  { name: 'コメント', header: ['投稿日時', '俳句ID', 'コメント投稿者', 'コメント'] },
+  { name: '投票',     header: ['投票日時', '俳句ID', '点数', '投票者ID'] },
+];
+
+/**
+ * 足りないシートだけを作る。
+ *
+ * ふつうは 1 枚も足りないことが無いので、その場合はロックを取らずに帰る
+ * （40 台が一斉に開く朝に、全員がロック待ちに並ぶのを避けるため）。
+ * 先生が誤って 1 枚消したときも、次に開いた人が作り直す。中身は戻らないが、
+ * 画面が TypeError で出なくなることは無くなる。
+ */
+function ensureSheets_(ss) {
+  var missing = SHEETS_.filter(function (s) { return !ss.getSheetByName(s.name); });
+  if (!missing.length) return ss;
+
+  var lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    SHEETS_.forEach(function (spec) {
+      if (ss.getSheetByName(spec.name)) return;   // ロック待ちの間に誰かが作っていた
+      var sheet = ss.insertSheet(spec.name);
+      sheet.appendRow(spec.header);
+      if (spec.firstRow) sheet.appendRow(spec.firstRow);
+      sheet.getRange('A1:K1').setBackground('#f3f4f6');
+    });
+  } finally {
+    lock.releaseLock();
+  }
+  return ss;
+}
+
+/**
+ * 作品を入れる表計算ファイル。
+ *
+ * ■ いまの配り方（コンテナバインド）
+ *   スプレッドシートのコピーを配り、そのファイルにこのスクリプトが束ねられている。
+ *   束ねられているファイルがそのまま本体なので、ID も自動生成も要らない。
+ *   先生は「どこにできたのか」を探さなくてよく、開いているそのファイルが中身である。
+ *
+ * ■ 前の配り方（独立スクリプト）で公開済みの学級
+ *   script.new で作った独立スクリプトには束ねられたファイルが無く、
+ *   getActiveSpreadsheet() は null を返す。その学級では、これまでどおり
+ *   スクリプトプロパティの DB_SPREADSHEET_ID を見て、無ければ作る。
+ *   **ここを消すと、すでに使っている学級のデータが見えなくなる。**
+ */
 function getDbSpreadsheet() {
+  var bound = null;
+  try {
+    bound = SpreadsheetApp.getActiveSpreadsheet();
+  } catch (e) {
+    bound = null;   // 独立スクリプトでは例外になる版がある
+  }
+  if (bound) return ensureSheets_(bound);
+
   const props = PropertiesService.getScriptProperties();
   let dbId = props.getProperty('DB_SPREADSHEET_ID');
 
@@ -13,7 +77,7 @@ function getDbSpreadsheet() {
     try {
       lock.waitLock(30000);
       dbId = props.getProperty('DB_SPREADSHEET_ID');
-      
+
       if (!dbId) {
         const ss = SpreadsheetApp.create('【自動生成】GIGA句会プラザ_DB');
         dbId = ss.getId();
@@ -24,24 +88,14 @@ function getDbSpreadsheet() {
         // 未設定のまま始め、先生が最初に先生用タブを開いたときに決めてもらう
         // （setupAdminPassword）。決めた合言葉はハッシュにして持つ。
 
-        const sheet1 = ss.getSheets()[0];
-        sheet1.setName('設定');
-        sheet1.appendRow(['お題', '投票状況']);
-        sheet1.appendRow(['自由律', '投票受付中']);
-        
-        const sheet2 = ss.insertSheet('俳句');
-        // J列（10列目）に非表示(ミュート)フラグを隠しデータとして持ちます
-        // K列（11列目）は投稿した端末の識別子。マイページで「自分の作品だけ」を
-        // 返すときに突き合わせます。児童には見せません。
-        sheet2.appendRow(['ID', '名前', '投稿日時', '俳句', '上の句', '中の句', '下の句', '得点', '公開名', 'ミュート', '投稿者ID']);
-        
-        const sheet3 = ss.insertSheet('コメント');
-        sheet3.appendRow(['投稿日時', '俳句ID', 'コメント投稿者', 'コメント']);
-        
-        const sheet4 = ss.insertSheet('投票');
-        sheet4.appendRow(['投票日時', '俳句ID', '点数', '投票者ID']);
-        
-        ss.getSheets().forEach(s => s.getRange('A1:K1').setBackground('#f3f4f6'));
+        // 新規作成の1枚目は「シート1」のまま残るので、設定に作り替えてから
+        // 残りを ensureSheets_ にそろえてもらう。
+        const first = ss.getSheets()[0];
+        first.setName(SHEETS_[0].name);
+        first.appendRow(SHEETS_[0].header);
+        first.appendRow(SHEETS_[0].firstRow);
+        first.getRange('A1:K1').setBackground('#f3f4f6');
+        ensureSheets_(ss);
       }
     } catch (e) {
       throw new Error('アクセスが集中しています。少し待ってから再度読み込んでください。');

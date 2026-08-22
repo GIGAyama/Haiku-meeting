@@ -57,6 +57,10 @@ jobs:
       - name: 外枠（app-shell）の読み分け
         run: npm run check:shell
 
+      # 作品を入れる表計算ファイルの取り方。前の配り方の学級を止めていないか。
+      - name: 表計算ファイルの取り方（コピー配布と独立スクリプトの両方）
+        run: npm run check:bound
+
   # 正本（GIGAyama.github.io/standards/）からコピーしたファイルが、
   # 正本の更新に取り残されていないかを見る。standards-map.json が対応表。
   drift:
