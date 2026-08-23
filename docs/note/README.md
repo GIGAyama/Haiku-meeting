@@ -71,7 +71,7 @@ README.md ではなく、コードと実測から取っています。
 | 記事の記述 | 出どころ |
 |---|---|
 | 画面は5つ | `src/app.jsx` の NavButton が5つ（投稿・広場・自分・過去・先生） |
-| 貼り付けるファイルは全部で5つ | `code.gs` ＋ HTML 4つ（app-shell / app / css / vendor）。外枠はもと `index` で、2026-08-22 に改名 |
+| コピーして入れる（貼り付けは代替） | `code.gs` の `getDbSpreadsheet()` がコンテナバインドを見分ける。貼り付ける場合は `code.gs` ＋ HTML 4つ（app-shell / app / css / vendor）。外枠はもと `index` で 2026-08-22 に改名 |
 | vendor は157キロバイトほど | 実測 160,271 バイト（156.5 KB） |
 | 最初に読み込む量はあわせて256キロバイトほど | 実測 app-shell 1.2 ＋ vendor 156.5 ＋ css 32.4 ＋ app 65.8 = 255.9 KB（2026-08-22 に測り直した） |
 | 金3点・銀2点・銅1点、1人3票 | `src/app.jsx` の HaikuModal と `code.gs` の submitVote（サーバー側でも二重投票を弾いている） |

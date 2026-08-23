@@ -173,31 +173,37 @@
     </ol>
 
     <h2>入れかた</h2>
-    <p>Google Apps Script にファイルを貼り付けて、公開の設定をするだけです。
-      準備するものは Google アカウント1つ。ふだんお使いの学校のアカウントで構いません。</p>
+    <p>スプレッドシートをコピーして、公開の設定をするだけです。
+      準備するものは Google アカウント1つ。ふだんお使いの学校のアカウントで構いません。
+      10分ほどで終わります。</p>
+
+    <div class="actions">
+      <a class="btn btn--primary" href="https://docs.google.com/spreadsheets/d/19VeKs838Yp8J4Xlxq4FWNfvmUj8u8ta31s2qOXGif0k/copy" rel="noopener">スプレッドシートをコピーして始める</a>
+    </div>
 
     <ol class="steps">
-      <li><a href="https://script.new/" rel="noopener">script.new</a> を開き、もとから入っているコードをすべて消します。</li>
-      <li><a href="https://github.com/GIGAyama/Haiku-meeting/blob/main/code.gs" rel="noopener"><code>code.gs</code></a>
-        の中身を、まるごと貼り付けます。</li>
-      <li>左の「ファイル」の横の「＋」から「HTML」を4回選び、名前を
-        <code>app-shell</code> ／ <code>app</code> ／ <code>css</code> ／ <code>vendor</code> にします。
-        拡張子は自動で付くので入力しません。</li>
-      <li>それぞれに、リポジトリの <code>app-shell.html</code> ／ <code>app.html</code> ／
-        <code>css.html</code> ／ <code>vendor.html</code> の中身を貼り付けます。</li>
+      <li>上のボタンを押し、「コピーを作成」を選びます。ご自分のドライブにファイルができます。</li>
+      <li>できたファイルを開き、上の「拡張機能」＞「Apps Script」を開きます。</li>
       <li>右上の「デプロイ」＞「新しいデプロイ」＞種類は「ウェブアプリ」。
         実行するユーザーは「自分」、アクセスできるユーザーは「同一ドメインの全員」をおすすめします。</li>
       <li>表示された URL を児童に配れば準備完了です。</li>
     </ol>
 
     <div class="callout">
-      <p><strong>貼り付けるのは全部で5つです。</strong>
-        <code>app-shell</code> が残りの3つを読み込む造りなので、1つでも欠けると画面が真っ白になります。
-        名前が1文字でも違っても出ません。うまく出ないときは、まずここを疑ってください。
-        <code>vendor</code> はいちばん長くて157キロバイトほどあります。途中で切れないよう、全文を選んで貼り付けてください。</p>
+      <p><strong>コードは、コピーしたファイルの中に入っています。</strong>
+        貼り付ける作業はありません。作品もそのファイルの中に入るので、
+        どこにできたのかを探す必要もありません。</p>
       <p>先生用の画面に入る合言葉は、はじめは決まっていません。
         <strong>いちばん最初に「先生」タブを開いた人がその場で決めます（6文字以上）。</strong>
         児童に URL を配る前に、先生が先に開いて決めてください。</p>
+    </div>
+
+    <div class="callout callout--warn">
+      <p><strong>コピーできないときは、貼り付けでも入ります。</strong>
+        学校のポリシーで、外部のファイルのコピーが禁じられていることがあります。
+        その場合は、<a href="https://github.com/GIGAyama/Haiku-meeting#readme" rel="noopener">README の「B. ファイルを貼り付ける」</a>
+        をご覧ください。<code>code.gs</code> と HTML 4つを Apps Script に貼る手順で、
+        入るものは同じです。</p>
     </div>
 
     <div class="callout callout--warn">
@@ -207,7 +213,7 @@
         句会をする時間だけ公開し、終わったら公開を止めてください。</p>
     </div>
 
-    <p>手順の全文は
+    <p>2通りの入れかたの全文は
       <a href="https://github.com/GIGAyama/Haiku-meeting#readme" rel="noopener">README</a>、
       当日の進め方は
       <a href="https://github.com/GIGAyama/Haiku-meeting/blob/main/MANUAL.md" rel="noopener">操作マニュアル</a>
@@ -253,6 +259,12 @@
         </tbody>
       </table>
     </div>
+
+    <h3>シートを点検する</h3>
+    <p>コピーしたスプレッドシートを開くと、上のメニューに「GIGA句会プラザ」が出ます。
+      「シートを点検する」を押すと、中の作りがアプリの想定どおりかを確かめられます。
+      得点や作者名は<strong>列の番号</strong>で読み書きしているので、
+      誤字の修正や行の削除はしていただいて構いませんが、<strong>列の並びは変えないでください。</strong></p>
 
     <h3>できないこと</h3>
     <p>正直に書いておきます。結果を CSV などに書き出す機能はありません（表計算ファイルを直接お使いください）。
