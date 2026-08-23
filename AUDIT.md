@@ -154,6 +154,98 @@ $ npm run check
 
 ---
 
+# 2026-08-23：自動反映を初めて走らせ、マニフェストの穴を塞いだ
+
+シークレットが登録され、Deploy を初めて実行した（run 5・再実行）。**結果は失敗。
+ただしこれは防御が働いた結果で、GAS には一切触れていない。**
+
+## 分かったこと（実測）
+
+| ステップ | 結果 |
+|---|---|
+| Check deployment secrets | ✅ 3つとも登録済み |
+| Run quality gate | ✅ **本番反映の手前で `npm run check` が本当に走った**（ログに全出力） |
+| Install clasp | ✅ |
+| Deploy | ❌ `assertSafeToPush()` が停止 |
+| Upload pre-push snapshot | ✅ 成果物に本番の中身 8 ファイル |
+
+### 本番の GAS は、3月の版のままだった
+
+控えに入っていたのは `コード.gs` / `index.html` / `plaza.html` / `mypage.html` /
+`admin.html` / `ui_components.html` / `archives.html`。
+`plaza.html` がこのリポジトリから消えたのは **2026-03-05**。
+
+**つまり教室で動いているのは 3 月上旬の版**で、CDN 依存の除去（8/3）も、管理者APIの
+認可（8/20）も、数式の無害化も、シートの点検も届いていない。
+自動反映を通せば、既存デプロイの差し替え（URL は変わらない）で全部いっぺんに届く。
+
+### 本番のマニフェストには `webapp` があった
+
+成果物の `appsscript.json` を人が読んで持ってきた値:
+
+```json
+"webapp": { "executeAs": "USER_DEPLOYING", "access": "ANYONE_ANONYMOUS" }
+```
+
+リポジトリ側には無かった。**このまま push していたら、公開中のアプリの入口の設定が
+消えるところだった。**同じ値をリポジトリへ写し、品質ゲートに 16 件目
+「appsscript.json に Web アプリの入口が書いてある」を足した（`--self-test` も 16/16）。
+
+`oauthScopes` は本番にも無い。B3 の判断（自動推定に任せる）と一致しているので、
+そのままにした。
+
+## まだ残っていること
+
+- **古い 6 ファイルを GAS エディタで消す**必要がある。消さないと
+  `assertSafeToPush()` が止め続ける（それが正しい動作）。
+  `GAS_ALLOW_DELETIONS=1` は `deploy.yml` が正本のコピーなので渡せない。
+- **`assertSafeToPush()` は `.claspignore` を見ていない。**リポジトリに同名の
+  ファイルがあれば「安全」と数えるので、**送らないファイル（いまの `index.html` は
+  サイトのトップ）と同名のものが本番にあると、警告なしに消える。**
+  `scripts/gas-deploy.mjs` は正本のコピーなので、直すなら
+  `GIGAyama.github.io/standards/gas/gas-deploy.mjs` が先。
+
+---
+
+# 2026-08-23：コピーリンクを差し込み、配り方を切り替えた
+
+テンプレートのスプレッドシートができたので、配るリンクを3か所に入れた。
+
+```
+https://docs.google.com/spreadsheets/d/19VeKs838Yp8J4Xlxq4FWNfvmUj8u8ta31s2qOXGif0k/copy
+```
+
+| 場所 | 前 | 後 |
+|---|---|---|
+| `README.md` | ［コピーリンク：未設定］ | 手順 A の1行目にリンク |
+| `index.html`（サイトのトップ） | 貼り付け手順 6 手 | コピーのボタン＋4 手。貼り付けは README へ誘導 |
+| 紹介記事 | 「貼り付ける手順」7 手 | 「入れる手順」5 手。コピーできない学校向けに貼り付けも併記 |
+
+**貼り付けの道は消していない。**学校のポリシーで外部ファイルのコピーが禁じられている
+ことがあり、そこで詰まると入れる手立てが無くなるため。
+
+## 反映経路（この時点での実測）
+
+- サイトのトップ … マージすれば GitHub Pages が配り直す
+- 紹介記事 … 翌朝 6:17（日本時間）の `sync-updates` が giga-school.com を組み直す
+- **GAS 本体 … 2026-08-23 にシークレットが登録された。**登録後の Deploy はまだ 1 回も
+  走っていない（直近の run 5 は 00:01、全ステップ skipped）。**この環境からは
+  `workflow_dispatch` を叩けない**（GitHub API が 403 `Resource not accessible by
+  integration` を返す）ので、実行は人の操作が要る。
+
+### ⚠️ 初回の本番反映で気をつけること
+
+`clasp push` は GAS 側のマニフェストを**丸ごと上書きする**。リポジトリの
+`appsscript.json` は 6 行しかなく、`webapp`（executeAs / access）を持っていない。
+**いま本番に入っている入口の設定が消えるおそれがある**（schoolplan_editor で実際に発生）。
+
+`scripts/gas-deploy.mjs` は push の前に `dist/gas-before-push/` へ控えを取り、
+ワークフローが `if: always()` でそれを成果物として上げる。**初回の run の成果物に、
+上書き前の本物の `appsscript.json` が入る。**その中身を見てから
+リポジトリ側に `webapp` を書き足すのが、値を推測せずに済む唯一の道。
+
+---
+
 # 2026-08-22 の改修（その3）：シートの列がずれたときに、気づけるようにした
 
 ## 何が見えていなかったか

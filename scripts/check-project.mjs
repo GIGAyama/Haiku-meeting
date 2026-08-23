@@ -143,6 +143,32 @@ const RULES = [
     break: (files) => { files.get('index.html').clean += "\n<?!= include('app'); ?>"; },
   },
   {
+    id: 'appsscript.json に Web アプリの入口が書いてある',
+    why: 'clasp push はマニフェストを丸ごと上書きする。無いまま送ると入口の設定が消える',
+    // 2026-08-23 の実測: 本番のマニフェストには webapp があり、リポジトリ側には
+    // 無かった。自動反映を始めた日に、その差がそのまま本番へ出るところだった。
+    // 値は本番と一致していなければならない。**推測で書き換えないこと。**
+    check: (files) => {
+      let manifest;
+      try {
+        manifest = JSON.parse(get(files, 'appsscript.json'));
+      } catch (e) {
+        return { ok: false, detail: 'appsscript.json が読めない（JSON として壊れている）' };
+      }
+      const web = manifest.webapp || {};
+      const ok = !!web.executeAs && !!web.access;
+      return {
+        ok,
+        detail: ok
+          ? `executeAs: ${web.executeAs} / access: ${web.access}`
+          : 'webapp（executeAs / access）が無い',
+      };
+    },
+    break: (files) => {
+      files.get('appsscript.json').clean = '{ "timeZone": "Asia/Tokyo", "runtimeVersion": "V8" }';
+    },
+  },
+  {
     id: 'code.gs が読む外枠のファイルがある',
     why: '名前がずれると、開いた瞬間に「ファイルが見つかりません」だけが出る',
     check: (files) => {
