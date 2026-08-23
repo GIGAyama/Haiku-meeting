@@ -194,16 +194,50 @@ $ npm run check
 `oauthScopes` は本番にも無い。B3 の判断（自動推定に任せる）と一致しているので、
 そのままにした。
 
+## 2 回目（run 6・04:09）で、本番へ届いた
+
+人が GAS エディタで古いファイルを消したあと、`main`（PR #12 のマージ）で自動的に走り、
+**成功した。**
+
+```
+$ clasp pull
+└─ dist/gas-before-push/appsscript.json
+Pulled one file..                       ← 控えは appsscript.json だけ＝消える物なし
+$ clasp push --force
+Pushed 6 files at 4:10:09 AM.
+└─ app-shell.html / app.html / appsscript.json / code.gs / css.html / vendor.html
+$ clasp deploy --deploymentId *** --description 42ee6eb…
+Deployed *** @10
+Webアプリを新しいバージョンへ更新しました（URLは変わりません）。
+```
+
+**バージョン 10 として既存デプロイを差し替えた。exec URL は変わっていない。**
+3月上旬の版から、5 か月ぶんの改修（CDN 依存の除去・管理者APIの認可・数式の無害化・
+外枠の改名・コンテナバインド対応・シートの点検）が一度に届いた。
+
+**これで「main にマージすれば本番に届く」経路が、実測で通った。**
+
 ## まだ残っていること
 
-- **古い 6 ファイルを GAS エディタで消す**必要がある。消さないと
-  `assertSafeToPush()` が止め続ける（それが正しい動作）。
-  `GAS_ALLOW_DELETIONS=1` は `deploy.yml` が正本のコピーなので渡せない。
+- **ブラウザでの確認は未実施。**この環境からは開けない。人が見るべきものは
+  下の「初回の反映後に見ること」に書いた。
 - **`assertSafeToPush()` は `.claspignore` を見ていない。**リポジトリに同名の
   ファイルがあれば「安全」と数えるので、**送らないファイル（いまの `index.html` は
   サイトのトップ）と同名のものが本番にあると、警告なしに消える。**
   `scripts/gas-deploy.mjs` は正本のコピーなので、直すなら
   `GIGAyama.github.io/standards/gas/gas-deploy.mjs` が先。
+
+## 初回の反映後に見ること
+
+1. **先生用タブを、児童より先に開く。** `access` は `ANYONE_ANONYMOUS` で、
+   合言葉が未設定なら**最初に開いた人が決められる**。3月の版から引き継いだ
+   平文の `ADMIN_PASSWORD` があれば `migrateAdminPassword_` がハッシュへ移す。
+2. **先生の管理画面に黄色い枠が出ていないか。** 3月の版のスプレッドシートは
+   列の作りが違うかもしれない。違えば `checkSheets_` がそこに出す。
+   出ていたら、**投票の締め切りはできない**（実名が別の列に入るため）。
+3. 「過去」「自分」タブに、これまでの句が残っているか
+   （`getDbSpreadsheet()` が `DB_SPREADSHEET_ID` の表計算に落ちているかの確認）。
+4. 1 句だけ投稿して、スプレッドシートに行が増えるか。
 
 ---
 
