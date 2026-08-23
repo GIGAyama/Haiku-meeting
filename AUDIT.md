@@ -154,6 +154,34 @@ $ npm run check
 
 ---
 
+# 2026-08-23：正本の直しを受け取った（消えるファイルの確認）
+
+`scripts/gas-deploy.mjs` を、直した正本のコピーに差し替えた
+（正本側の PR: GIGAyama.github.io#64）。
+
+## 何が直ったか
+
+`assertSafeToPush()` が `.claspignore` を見ていなかったため、**送らないファイルでも
+名前が同じというだけで「安全」と数えていた。** このリポジトリの `index.html` は
+GitHub Pages に置くサイトのトップで、GAS へは送らない。それでも「リポジトリにある」と
+数えられ、本番の `index.html` が**警告なしに消える**ところだった。
+
+手元で実測（2026-08-23）:
+
+```
+リポジトリ直下の対象ファイル: app-shell.html app.html appsscript.json code.gs css.html
+                              index.html package-lock.json package.json privacy.html
+                              quality.config.json standards-map.json terms.html vendor.html
+clasp が送るもの            : app-shell.html app.html appsscript.json code.gs css.html vendor.html
+
+本番に index.html があったら → 消えると分かるか: ["index.html"]
+直す前の数え方だと                              : []            ← 警告なしで消えていた
+```
+
+ドリフト検知は `✅ 正本と一致しています（2 ファイル）`。
+
+---
+
 # 2026-08-23：既定の入口を DOMAIN にした
 
 人の判断で、`appsscript.json` の `webapp.access` を
