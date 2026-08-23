@@ -154,6 +154,59 @@ $ npm run check
 
 ---
 
+# 2026-08-23：自動反映を初めて走らせ、マニフェストの穴を塞いだ
+
+シークレットが登録され、Deploy を初めて実行した（run 5・再実行）。**結果は失敗。
+ただしこれは防御が働いた結果で、GAS には一切触れていない。**
+
+## 分かったこと（実測）
+
+| ステップ | 結果 |
+|---|---|
+| Check deployment secrets | ✅ 3つとも登録済み |
+| Run quality gate | ✅ **本番反映の手前で `npm run check` が本当に走った**（ログに全出力） |
+| Install clasp | ✅ |
+| Deploy | ❌ `assertSafeToPush()` が停止 |
+| Upload pre-push snapshot | ✅ 成果物に本番の中身 8 ファイル |
+
+### 本番の GAS は、3月の版のままだった
+
+控えに入っていたのは `コード.gs` / `index.html` / `plaza.html` / `mypage.html` /
+`admin.html` / `ui_components.html` / `archives.html`。
+`plaza.html` がこのリポジトリから消えたのは **2026-03-05**。
+
+**つまり教室で動いているのは 3 月上旬の版**で、CDN 依存の除去（8/3）も、管理者APIの
+認可（8/20）も、数式の無害化も、シートの点検も届いていない。
+自動反映を通せば、既存デプロイの差し替え（URL は変わらない）で全部いっぺんに届く。
+
+### 本番のマニフェストには `webapp` があった
+
+成果物の `appsscript.json` を人が読んで持ってきた値:
+
+```json
+"webapp": { "executeAs": "USER_DEPLOYING", "access": "ANYONE_ANONYMOUS" }
+```
+
+リポジトリ側には無かった。**このまま push していたら、公開中のアプリの入口の設定が
+消えるところだった。**同じ値をリポジトリへ写し、品質ゲートに 16 件目
+「appsscript.json に Web アプリの入口が書いてある」を足した（`--self-test` も 16/16）。
+
+`oauthScopes` は本番にも無い。B3 の判断（自動推定に任せる）と一致しているので、
+そのままにした。
+
+## まだ残っていること
+
+- **古い 6 ファイルを GAS エディタで消す**必要がある。消さないと
+  `assertSafeToPush()` が止め続ける（それが正しい動作）。
+  `GAS_ALLOW_DELETIONS=1` は `deploy.yml` が正本のコピーなので渡せない。
+- **`assertSafeToPush()` は `.claspignore` を見ていない。**リポジトリに同名の
+  ファイルがあれば「安全」と数えるので、**送らないファイル（いまの `index.html` は
+  サイトのトップ）と同名のものが本番にあると、警告なしに消える。**
+  `scripts/gas-deploy.mjs` は正本のコピーなので、直すなら
+  `GIGAyama.github.io/standards/gas/gas-deploy.mjs` が先。
+
+---
+
 # 2026-08-23：コピーリンクを差し込み、配り方を切り替えた
 
 テンプレートのスプレッドシートができたので、配るリンクを3か所に入れた。
