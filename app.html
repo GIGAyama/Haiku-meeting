@@ -66,7 +66,10 @@ const runGas = (funcName, ...args) => {
               settings: {
                 theme: '春の訪れ',
                 votingStatus: '投票受付中'
-              }
+              },
+              // シートの作りの所見。ふだんは空。ここに1件入れると、
+              // GAS の外でも警告の見た目を確かめられる。
+              sheetIssues: []
             });
           case 'getMyHaikus':
             return resolve([]);
@@ -1343,7 +1346,26 @@ const AdminView = ({
     onClick: loadDashboard,
     disabled: isProcessing,
     className: "tap-44 text-sm bg-white border border-slate-200 px-4 py-2 min-h-[44px] rounded-lg shadow-sm hover:bg-slate-50"
-  }, "↻ 最新の情報に更新")), /*#__PURE__*/React.createElement("div", {
+  }, "↻ 最新の情報に更新")), dashData.sheetIssues && dashData.sheetIssues.length > 0 && /*#__PURE__*/React.createElement("div", {
+    role: "alert",
+    className: "bg-amber-50 border-2 border-amber-500 rounded-2xl p-5"
+  }, /*#__PURE__*/React.createElement("h3", {
+    className: "font-bold text-amber-900 mb-2"
+  }, "⚠ スプレッドシートの作りが、アプリの想定と違います"), /*#__PURE__*/React.createElement("ul", {
+    className: "list-disc pl-5 space-y-1 text-sm text-amber-900"
+  }, dashData.sheetIssues.map((f, i) => /*#__PURE__*/React.createElement("li", {
+    key: i
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "font-bold"
+  }, "「", f.sheet, "」", f.kind), "：", f.detail))), /*#__PURE__*/React.createElement("p", {
+    className: "text-sm text-amber-900 mt-3"
+  }, "得点・ミュート・作者名は", /*#__PURE__*/React.createElement("span", {
+    className: "font-bold"
+  }, "列の番号"), "で読み書きしています。 列を足したり順番を変えたりすると、画面に何も出ないまま結果がずれます。 もとの並びに戻してから「↻ 最新の情報に更新」を押してください。"), /*#__PURE__*/React.createElement("p", {
+    className: "text-sm text-amber-900 mt-1"
+  }, "なお、この状態では", /*#__PURE__*/React.createElement("span", {
+    className: "font-bold"
+  }, "投票を締め切れません"), "。 作者名を別の列へ書き込んでしまうためです。")), /*#__PURE__*/React.createElement("div", {
     className: "grid grid-cols-2 md:grid-cols-4 gap-4"
   }, /*#__PURE__*/React.createElement(StatCard, {
     label: "参加児童数 (人)",

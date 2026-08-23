@@ -28,17 +28,28 @@ const mkSheet = (name) => ({
   getDataRange: () => ({ getValues: () => sheetRows[name] }),
   // A1 記法をちゃんと見る。ここを手抜きすると getSettingsData が
   // 「お題」を投票状況として読み、締切の判定が常に false になる（実際にそうなった）。
-  getRange: (a1) => {
-    const m = /^([A-K])(\d+)/.exec(String(a1) || 'A1');
-    const col = m ? m[1].charCodeAt(0) - 65 : 0;
-    const row = m ? Number(m[2]) - 1 : 0;
+  // 数字での getRange(行, 列, 行数, 列数) も受ける。checkSheets_ が見出し行を
+  // この形で読むので、A1 記法だけにすると本番と違う道を通る。
+  getRange: (a1, c, h, w) => {
+    let row = 0, col = 0, rows = 1, cols = 1;
+    if (typeof a1 === 'number') {
+      row = a1 - 1; col = (c || 1) - 1; rows = h || 1; cols = w || 1;
+    } else {
+      const m = /^([A-K])(\d+)/.exec(String(a1) || 'A1');
+      col = m ? m[1].charCodeAt(0) - 65 : 0;
+      row = m ? Number(m[2]) - 1 : 0;
+    }
     return {
       getValue: () => sheetRows[name]?.[row]?.[col] ?? '',
       setValue: (v) => { (sheetRows[name][row] ||= [])[col] = v; },
-      getValues: () => [], setValues: () => {}, clearContent: () => {}, setBackground: () => {},
+      getValues: () => Array.from({ length: rows }, (_, i) =>
+        Array.from({ length: cols }, (_, j) => sheetRows[name]?.[row + i]?.[col + j] ?? '')),
+      setValues: () => {}, clearContent: () => {}, setBackground: () => {},
     };
   },
   getLastRow: () => (sheetRows[name] || []).length,
+  getLastColumn: () => (sheetRows[name] || []).reduce((m, r) => Math.max(m, r.length), 0),
+  getMaxColumns: () => 26,
   appendRow: (r) => sheetRows[name].push(r),
   setName: () => {},
 });

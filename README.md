@@ -240,6 +240,8 @@ npm run check                       # 下の検査を、CI と同じ順で全部
 | `npm run check:admin` | 合鍵なしで管理者APIが弾かれるか |
 | `npm run check:cell` | 児童の書いた文字が、表計算のなかで数式として動き出さないか |
 | `npm run check:shell` | 外枠（`app-shell`）の読み分け。前の版を貼ったままの学級でも画面が出るか |
+| `npm run check:bound` | 表計算ファイルの取り方（コピー配布と独立スクリプトの両方） |
+| `npm run check:shape` | シートの列がずれたときに気づけるか・勝手に直していないか |
 
 > **`npm run check` という名前は変えないでください。** `main` にマージしたときに走る
 > Deploy（`.github/workflows/deploy.yml`）は、`package.json` の
