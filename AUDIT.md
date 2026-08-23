@@ -154,6 +154,60 @@ $ npm run check
 
 ---
 
+# 2026-08-23：正本の直しを受け取った（消えるファイルの確認）
+
+`scripts/gas-deploy.mjs` を、直した正本のコピーに差し替えた
+（正本側の PR: GIGAyama.github.io#64）。
+
+## 何が直ったか
+
+`assertSafeToPush()` が `.claspignore` を見ていなかったため、**送らないファイルでも
+名前が同じというだけで「安全」と数えていた。** このリポジトリの `index.html` は
+GitHub Pages に置くサイトのトップで、GAS へは送らない。それでも「リポジトリにある」と
+数えられ、本番の `index.html` が**警告なしに消える**ところだった。
+
+手元で実測（2026-08-23）:
+
+```
+リポジトリ直下の対象ファイル: app-shell.html app.html appsscript.json code.gs css.html
+                              index.html package-lock.json package.json privacy.html
+                              quality.config.json standards-map.json terms.html vendor.html
+clasp が送るもの            : app-shell.html app.html appsscript.json code.gs css.html vendor.html
+
+本番に index.html があったら → 消えると分かるか: ["index.html"]
+直す前の数え方だと                              : []            ← 警告なしで消えていた
+```
+
+ドリフト検知は `✅ 正本と一致しています（2 ファイル）`。
+
+---
+
+# 2026-08-23：既定の入口を DOMAIN にした
+
+人の判断で、`appsscript.json` の `webapp.access` を
+`ANYONE_ANONYMOUS`（全員・匿名を含む）から **`DOMAIN`（同一ドメインの全員）** に変えた。
+
+## なぜ
+
+README も紹介記事も「同一ドメインの全員」をすすめているのに、マニフェストの既定は
+匿名を含む全員だった。**コピーで配ったテンプレートの既定もそれになる**ので、
+何も考えずにデプロイした先生の学級が、URL を知っていれば校外の人でも書き込める
+状態で始まってしまう。すすめている値と既定を一致させた。
+
+## この変更で起きること
+
+**次の自動反映で、公開中のアプリの入口が変わる。**`clasp push` はマニフェストを
+丸ごと上書きし、`clasp deploy` がその設定で新しいバージョンに差し替えるため。
+
+- 学校の Google アカウントでログインしている児童 … これまでどおり
+- ログインしていない・学校アカウントを持たない児童 … **入れなくなる**
+
+**児童が学校のアカウントを持たない学級では、GAS 側のデプロイ設定を
+`ANYONE_ANONYMOUS` に戻し、あわせてこのリポジトリの `appsscript.json` も戻すこと。**
+リポジトリだけ `DOMAIN` のままにすると、次の自動反映でまた戻ってしまう。
+
+---
+
 # 2026-08-23：自動反映を初めて走らせ、マニフェストの穴を塞いだ
 
 シークレットが登録され、Deploy を初めて実行した（run 5・再実行）。**結果は失敗。
@@ -194,16 +248,50 @@ $ npm run check
 `oauthScopes` は本番にも無い。B3 の判断（自動推定に任せる）と一致しているので、
 そのままにした。
 
+## 2 回目（run 6・04:09）で、本番へ届いた
+
+人が GAS エディタで古いファイルを消したあと、`main`（PR #12 のマージ）で自動的に走り、
+**成功した。**
+
+```
+$ clasp pull
+└─ dist/gas-before-push/appsscript.json
+Pulled one file..                       ← 控えは appsscript.json だけ＝消える物なし
+$ clasp push --force
+Pushed 6 files at 4:10:09 AM.
+└─ app-shell.html / app.html / appsscript.json / code.gs / css.html / vendor.html
+$ clasp deploy --deploymentId *** --description 42ee6eb…
+Deployed *** @10
+Webアプリを新しいバージョンへ更新しました（URLは変わりません）。
+```
+
+**バージョン 10 として既存デプロイを差し替えた。exec URL は変わっていない。**
+3月上旬の版から、5 か月ぶんの改修（CDN 依存の除去・管理者APIの認可・数式の無害化・
+外枠の改名・コンテナバインド対応・シートの点検）が一度に届いた。
+
+**これで「main にマージすれば本番に届く」経路が、実測で通った。**
+
 ## まだ残っていること
 
-- **古い 6 ファイルを GAS エディタで消す**必要がある。消さないと
-  `assertSafeToPush()` が止め続ける（それが正しい動作）。
-  `GAS_ALLOW_DELETIONS=1` は `deploy.yml` が正本のコピーなので渡せない。
+- **ブラウザでの確認は未実施。**この環境からは開けない。人が見るべきものは
+  下の「初回の反映後に見ること」に書いた。
 - **`assertSafeToPush()` は `.claspignore` を見ていない。**リポジトリに同名の
   ファイルがあれば「安全」と数えるので、**送らないファイル（いまの `index.html` は
   サイトのトップ）と同名のものが本番にあると、警告なしに消える。**
   `scripts/gas-deploy.mjs` は正本のコピーなので、直すなら
   `GIGAyama.github.io/standards/gas/gas-deploy.mjs` が先。
+
+## 初回の反映後に見ること
+
+1. **先生用タブを、児童より先に開く。** `access` は `ANYONE_ANONYMOUS` で、
+   合言葉が未設定なら**最初に開いた人が決められる**。3月の版から引き継いだ
+   平文の `ADMIN_PASSWORD` があれば `migrateAdminPassword_` がハッシュへ移す。
+2. **先生の管理画面に黄色い枠が出ていないか。** 3月の版のスプレッドシートは
+   列の作りが違うかもしれない。違えば `checkSheets_` がそこに出す。
+   出ていたら、**投票の締め切りはできない**（実名が別の列に入るため）。
+3. 「過去」「自分」タブに、これまでの句が残っているか
+   （`getDbSpreadsheet()` が `DB_SPREADSHEET_ID` の表計算に落ちているかの確認）。
+4. 1 句だけ投稿して、スプレッドシートに行が増えるか。
 
 ---
 
