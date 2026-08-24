@@ -181,6 +181,7 @@
 
           <footer className="no-print flex-none w-full text-center text-slate-600 py-4 bg-white border-t border-slate-100 text-sm font-sans">
             <span>© 2026 GIGA句会プラザ <a href="https://giga-school.com" target="_blank" rel="noopener noreferrer" className="tap-44 inline-block no-underline text-inherit hover:opacity-80 transition-opacity">GIGA山</a></span>
+            <span> <a href="https://giga-school.com/apps/haiku-meeting/" target="_blank" rel="noopener noreferrer" className="tap-44 inline-block no-underline text-inherit hover:opacity-80 transition-opacity">使い方を読む</a></span>
           </footer>
 
           {/* 読み上げソフトに知らせる。成功は polite（読み上げ中を遮らない）、
