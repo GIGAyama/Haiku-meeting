@@ -20,7 +20,8 @@
     "gas:status": "node scripts/gas-deploy.mjs status",
     "gas:backup": "node scripts/gas-deploy.mjs backup",
     "gas:push": "node scripts/gas-deploy.mjs push",
-    "deploy": "node scripts/gas-deploy.mjs deploy"
+    "deploy": "node scripts/gas-deploy.mjs deploy",
+    "build:fonts": "node tools/fonts/build-fonts.mjs"
   },
   "devDependencies": {
     "@babel/core": "7.29.7",

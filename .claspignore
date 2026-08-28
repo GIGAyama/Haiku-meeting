@@ -22,3 +22,5 @@
 !css.html
 !app-shell.html
 !vendor.html
+# 書体（生成物）。app-shell.html が include() で読むので、送らないと当たらない。
+!fonts.html

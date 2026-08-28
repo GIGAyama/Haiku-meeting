@@ -19,8 +19,20 @@
   <?!= include('vendor'); ?>
   <?!= include('css'); ?>
 
-  <!-- 和風フォント。届かなくても字が崩れないよう、後ろに端末側の明朝体を並べてある -->
-  <link href="https://fonts.googleapis.com/css2?family=Yuji+Syuku&display=swap" rel="stylesheet">
+  <!--
+    和風フォント（Yuji Syuku）。生成物です。作り直すには npm run build:fonts。
+
+    ⚠️ ここに Google Fonts への <link> を戻さないこと。フィルタが「握ったまま
+       返さない」形で塞ぐと、スタイルシートの読み込みが終わらず script が
+       動き出さず、真っ白のまま何も起きません（Quarto で 2026-08-23 に実際に起きた）。
+
+    ⚠️ 収録は「画面に出る字＋小学1〜2年の配当漢字」までです。
+       俳句は児童が打つものなので、どの字が来るかは先に分かりません。
+       ここに無い字は端末の明朝体に落ちます（豆腐にはなりません）。
+       もっと広げたいときは fonts.config.json の grades を増やしてください
+       （1〜6年まで入れると 245KB → 615KB になります。gzip 後、1 ページあたり）。
+  -->
+  <?!= include('fonts'); ?>
   
 </head>
 <body>

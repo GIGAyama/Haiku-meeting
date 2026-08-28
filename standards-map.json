@@ -7,6 +7,18 @@
     {
       "canonical": "gas/deploy.yml",
       "local": ".github/workflows/deploy.yml"
+    },
+    {
+      "canonical": "fonts/build-fonts.mjs",
+      "local": "tools/fonts/build-fonts.mjs"
+    },
+    {
+      "canonical": "fonts/chars.mjs",
+      "local": "tools/fonts/chars.mjs"
+    },
+    {
+      "canonical": "fonts/ofl.mjs",
+      "local": "tools/fonts/ofl.mjs"
     }
   ],
   "dirs": [
