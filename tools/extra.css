@@ -1,7 +1,8 @@
 /* もとから index.html に書いてあったスタイル。Tailwind の出力のあとに置く。 */
 body {
-  /* Yuji Syuku は Google Fonts から読む。学校のフィルタリングで塞がれても
-     字が崩れないよう、端末側の明朝体を後ろに並べる。 */
+  /* Yuji Syuku は自己ホスト（fonts.html に data: URI で埋めこみ）。
+     収録外の字（児童が打つ俳句の漢字など）は端末側の明朝体に落ちるので、
+     後ろに並べたままにしておく。 */
   font-family: 'Yuji Syuku', 'Hiragino Mincho ProN', 'Yu Mincho', 'Noto Serif JP', serif;
   background-color: #fdfaf6;
   color: #333;

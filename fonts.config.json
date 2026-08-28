@@ -1,0 +1,28 @@
+{
+  "family": "Yuji Syuku",
+  "weights": [
+    400
+  ],
+  "grades": [
+    1,
+    2
+  ],
+  "scan": [
+    "app-shell.html",
+    "css.html",
+    "src"
+  ],
+  "scanExt": [
+    ".html",
+    ".css",
+    ".jsx",
+    ".js"
+  ],
+  "embed": true,
+  "cssPath": "fonts.html",
+  "oflPath": "OFL.txt",
+  "generator": "tools/fonts/build-fonts.mjs",
+  "license": "Yuji Syuku — SIL Open Font License 1.1（全文は OFL.txt）",
+  "copyright": "Copyright 2021 The Yuji Project Authors (https://github.com/Kinutafontfactory/Yuji)",
+  "//": "書体の取りこみ方。作り直すには npm run build:fonts（ネットが要る）。grades は艦隊の既定（小学1〜2年）。児童が打つ俳句の漢字は先に読めないので、ここに無い字は端末の明朝体に落ちる"
+}
