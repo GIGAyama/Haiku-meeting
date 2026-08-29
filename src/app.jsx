@@ -179,9 +179,29 @@
             </div>
           </main>
 
-          <footer className="no-print flex-none w-full text-center text-slate-600 py-4 bg-white border-t border-slate-100 text-sm font-sans">
-            <span>© 2026 GIGA句会プラザ <a href="https://giga-school.com" target="_blank" rel="noopener noreferrer" className="tap-44 inline-block no-underline text-inherit hover:opacity-80 transition-opacity">GIGA山</a></span>
-            <span> <a href="https://giga-school.com/apps/haiku-meeting/" target="_blank" rel="noopener noreferrer" className="tap-44 inline-block no-underline text-inherit hover:opacity-80 transition-opacity">使い方を読む</a></span>
+          {/* ⚠️ 1 行に収める。py-4（上下 16px）から py-1 に落とし、折り返さない
+              flex にした。ここが太ると、そのぶん句を書く場所が狭くなる。
+              著作権表示は幅が足りなくなったら … で切る（min-w-0 が無いと
+              縮まずに列を押し広げて横スクロールになる）。 */}
+          <footer className="no-print flex-none w-full flex flex-nowrap items-center justify-center gap-1 text-slate-600 py-1 bg-white border-t border-slate-100 text-sm font-sans">
+            <span className="min-w-0 truncate">© 2026 GIGA句会プラザ <a href="https://giga-school.com" target="_blank" rel="noopener noreferrer" className="tap-44 inline-block no-underline text-inherit hover:opacity-80 transition-opacity">GIGA山</a></span>
+            {/* ⚠️ 行き先のリンクを手で書かないこと。中身は正本の部品
+                standards/web/giga-app-links.js（配布物 web/giga-app-links.js）が
+                この中に出す。GAS へは giga-links.html として焼き込んで送る
+                （tools/build-app-links.mjs と .claspignore）。
+                文言も並びも行き先も、あちらで決まっている。
+
+                ⚠️ <div> にしないこと。そこで改行が入ってフッターが 2 行になる。
+
+                ⚠️ ここに あった「使い方を読む」（紹介記事へのリンク）は外した。
+                   紹介記事は「なぜ作ったか」を、まだ使っていない先生に向けて
+                   書いたもので、いま画面の前で困っている人が求めるものではない。
+                   艦隊のほかのアプリでも既に外れている。
+
+                ⚠️ 出すものは giga-links.html 側（window.GIGA_APP_LINKS）で
+                   "terms,privacy" に絞ってある。まだ docs/manual/ が無く、
+                   既定のまま出すと行き止まりの「つかいかた」が 1 本増えるため。 */}
+            <span data-giga-links />
           </footer>
 
           {/* 読み上げソフトに知らせる。成功は polite（読み上げ中を遮らない）、

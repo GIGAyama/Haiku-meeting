@@ -24,3 +24,7 @@
 !vendor.html
 # 書体（生成物）。app-shell.html が include() で読むので、送らないと当たらない。
 !fonts.html
+# 利用規約・プライバシーへの行き先を出す部品（生成物。tools/build-app-links.mjs）。
+# 同じく include() で読むので、送らないと GAS の画面だけリンクが出ない。
+# しかもエラーにはならないので、開いて見るまで気づけない。
+!giga-links.html

@@ -428,18 +428,17 @@ const App = () => {
     }, /*#__PURE__*/React.createElement("div", {
       className: "max-w-6xl mx-auto"
     }, renderView())), /*#__PURE__*/React.createElement("footer", {
-      className: "no-print flex-none w-full text-center text-slate-600 py-4 bg-white border-t border-slate-100 text-sm font-sans"
-    }, /*#__PURE__*/React.createElement("span", null, "© 2026 GIGA句会プラザ ", /*#__PURE__*/React.createElement("a", {
+      className: "no-print flex-none w-full flex flex-nowrap items-center justify-center gap-1 text-slate-600 py-1 bg-white border-t border-slate-100 text-sm font-sans"
+    }, /*#__PURE__*/React.createElement("span", {
+      className: "min-w-0 truncate"
+    }, "© 2026 GIGA句会プラザ ", /*#__PURE__*/React.createElement("a", {
       href: "https://giga-school.com",
       target: "_blank",
       rel: "noopener noreferrer",
       className: "tap-44 inline-block no-underline text-inherit hover:opacity-80 transition-opacity"
-    }, "GIGA山")), /*#__PURE__*/React.createElement("span", null, " ", /*#__PURE__*/React.createElement("a", {
-      href: "https://giga-school.com/apps/haiku-meeting/",
-      target: "_blank",
-      rel: "noopener noreferrer",
-      className: "tap-44 inline-block no-underline text-inherit hover:opacity-80 transition-opacity"
-    }, "使い方を読む"))), /*#__PURE__*/React.createElement("div", {
+    }, "GIGA山")), /*#__PURE__*/React.createElement("span", {
+      "data-giga-links": true
+    })), /*#__PURE__*/React.createElement("div", {
       "aria-live": "polite",
       className: "no-print fixed bottom-6 right-1/2 translate-x-1/2 sm:translate-x-0 sm:right-6 z-50 flex flex-col gap-2 pointer-events-none w-full max-w-sm px-4"
     }, toasts.map(toast =>
