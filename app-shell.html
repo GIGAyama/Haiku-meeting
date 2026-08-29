@@ -40,5 +40,21 @@
 
   <?!= include('app'); ?>
 
+  <!--
+    利用規約・プライバシーへの行き先。中身は正本の部品
+    standards/web/giga-app-links.js（配布物 web/giga-app-links.js）です。
+    giga-links.html は tools/build-app-links.mjs が焼き込む生成物なので、
+    手で編集しないこと。
+
+    ⚠️ include('app') より後に置くこと。フッターの置き場所
+       <span data-giga-links> は React が描くので、先に読むと置き場所が
+       まだ無い。部品は「まず出して、あとで置き場所へ移す」作りなので
+       どちらでも出はするが、順番を守れば移し替えが 1 回減る。
+
+    ⚠️ .claspignore に !giga-links.html が要る。送られないと、GAS の画面
+       だけリンクが出ない。エラーにはならないので、開いて見るまで気づけない。
+  -->
+  <?!= include('giga-links'); ?>
+
 </body>
 </html>
